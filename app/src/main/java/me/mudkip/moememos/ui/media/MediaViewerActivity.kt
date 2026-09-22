@@ -1,8 +1,15 @@
 package me.mudkip.moememos.ui.media
 
+import android.content.ContentValues
+import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
+import android.webkit.MimeTypeMap
+import android.widget.Toast
 import android.widget.VideoView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -37,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -95,6 +103,7 @@ import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
+import java.net.URLConnection
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -373,6 +382,19 @@ private fun MediaViewerPage(
         }
     }
 
+    fun saveCurrentImage() {
+        val file = sourceFile ?: return
+        markInteraction()
+        scope.launch {
+            val saved = saveImageToMediaStore(context, file, imageUrl)
+            if (saved) {
+                Toast.makeText(context, R.string.saved_to_gallery.string, Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, R.string.failed_to_save.string, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     LaunchedEffect(sourceFile) {
         motionVideoFile = null
         motionVideoPlaying = false
@@ -555,6 +577,23 @@ private fun MediaViewerPage(
                     .graphicsLayer { alpha = pageOverlayAlpha }
                     .padding(16.dp)
             )
+        }
+
+        if (sourceFile != null) {
+            IconButton(
+                onClick = ::saveCurrentImage,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .graphicsLayer { alpha = pageOverlayAlpha }
+                    .padding(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Save,
+                    contentDescription = R.string.save_to_gallery.string,
+                    tint = Color.White
+                )
+            }
         }
     }
 }
@@ -974,6 +1013,61 @@ private fun List<PointerInputChange>.calculateAverageDistance(centroid: Offset):
         distance += (change.position - centroid).getDistance()
     }
     return distance / size
+}
+
+private suspend fun saveImageToMediaStore(context: Context, file: File, sourceUrl: String): Boolean = withContext(Dispatchers.IO) {
+    runCatching {
+        val mimeType = sniffImageMimeType(file, sourceUrl)
+        val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType) ?: "jpg"
+        val displayName = "moememos_${System.currentTimeMillis()}.$extension"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            val resolver = context.contentResolver
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(collection, values)
+                ?: return@runCatching false
+            resolver.openOutputStream(uri)?.use { output ->
+                file.inputStream().use { input ->
+                    input.copyTo(output)
+                }
+            } ?: return@runCatching false
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            true
+        } else {
+            val dir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                "MoeMemos"
+            ).also { it.mkdirs() }
+            val target = File(dir, displayName)
+            file.copyTo(target, overwrite = true)
+            MediaScannerConnection.scanFile(
+                context,
+                arrayOf(target.absolutePath),
+                arrayOf(mimeType),
+                null
+            )
+            true
+        }
+    }.getOrDefault(false)
+}
+
+private fun sniffImageMimeType(file: File, sourceUrl: String): String {
+    runCatching {
+        file.inputStream().use { stream ->
+            URLConnection.guessContentTypeFromStream(stream)?.let { return it }
+        }
+    }
+    val extension = MimeTypeMap.getFileExtensionFromUrl(sourceUrl).lowercase()
+    if (extension.isNotBlank()) {
+        MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)?.let { return it }
+    }
+    return "image/jpeg"
 }
 
 private suspend fun extractMotionVideoFile(cacheDir: File, sourceFile: File): File? = withContext(Dispatchers.IO) {

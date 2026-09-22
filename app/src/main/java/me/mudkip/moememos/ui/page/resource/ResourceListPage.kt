@@ -125,7 +125,7 @@ fun ResourceListPage(
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
                     lazyItems(otherResources, key = { it.identifier }) { resource ->
-                        Attachment(resource = resource)
+                        Attachment(resource = resource, showMenu = true)
                     }
                 }
             }

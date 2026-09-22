@@ -85,6 +85,9 @@
     <string name="sync_status_unsynced">未同步的更改</string>
     <string name="memo_sync_pending">MEMO 未同步</string>
     <string name="failed_to_open_attachment">无法打开附件</string>
+    <string name="save_to_gallery">保存到相册</string>
+    <string name="saved_to_gallery">已保存到相册</string>
+    <string name="failed_to_save">保存失败</string>
     <string name="export_local_account">导出本地数据</string>
     <string name="local_export_success">本地数据已导出</string>
     <string name="local_export_failed">导出本地数据失败</string>

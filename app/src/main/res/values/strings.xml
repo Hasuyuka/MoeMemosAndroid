@@ -101,6 +101,9 @@
     <string name="autosave">Autosave</string>
     <string name="autosave_summary">Save every change on this device and sync it in the background</string>
     <string name="failed_to_open_attachment">Failed to open attachment</string>
+    <string name="save_to_gallery">Save to gallery</string>
+    <string name="saved_to_gallery">Saved to gallery</string>
+    <string name="failed_to_save">Failed to save</string>
     <string name="export_local_account">Export Local Data</string>
     <string name="local_export_success">Local data exported</string>
     <string name="local_export_failed">Failed to export local data</string>

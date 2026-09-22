@@ -109,6 +109,7 @@ dependencies {
     implementation "com.github.skydoves:sandwich-retrofit-serialization:${rootProject.ext.sandwich}"
     implementation "io.coil-kt.coil3:coil-compose:${rootProject.ext.coil_version}"
     implementation "io.coil-kt.coil3:coil-network-okhttp:${rootProject.ext.coil_version}"
+    implementation "io.coil-kt.coil3:coil-gif:${rootProject.ext.coil_version}"
     implementation "org.jetbrains:markdown:${rootProject.ext.markdown_version}"
     implementation "com.mikepenz:multiplatform-markdown-renderer-m3:${rootProject.ext.markdown_renderer_version}"
     implementation "com.mikepenz:multiplatform-markdown-renderer-code:${rootProject.ext.markdown_renderer_version}"

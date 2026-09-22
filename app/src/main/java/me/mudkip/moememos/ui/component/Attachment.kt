@@ -1,8 +1,13 @@
 package me.mudkip.moememos.ui.component
 
 import android.content.ClipData
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.media.MediaScannerConnection
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.compose.foundation.layout.size
@@ -10,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Attachment
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.DropdownMenu
@@ -45,7 +51,8 @@ import java.io.File
 @Composable
 fun Attachment(
     resource: ResourceRepresentable,
-    onRemove: (() -> Unit)? = null
+    onRemove: (() -> Unit)? = null,
+    showMenu: Boolean = false
 ) {
     val context = LocalContext.current
     val memosViewModel = LocalMemos.current
@@ -53,6 +60,7 @@ fun Attachment(
     val scope = rememberCoroutineScope()
     var menuExpanded by remember { mutableStateOf(false) }
     var opening by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
 
     fun openAttachment() {
         if (opening) {
@@ -100,10 +108,55 @@ fun Attachment(
         }
     }
 
+    fun saveAttachment() {
+        if (saving) {
+            return
+        }
+        scope.launch {
+            saving = true
+            try {
+                val localFile = resolveAttachmentFile(
+                    context = context,
+                    resource = resource,
+                    okHttpClient = userStateViewModel.okHttpClient,
+                    cacheCanonical = { resourceIdentifier, downloadedUri ->
+                        val result = memosViewModel.cacheResourceFile(resourceIdentifier, downloadedUri)
+                        if (result is ApiResponse.Success) {
+                            memosViewModel.getResourceById(resourceIdentifier)
+                        } else {
+                            null
+                        }
+                    }
+                )
+                if (localFile == null) {
+                    Toast.makeText(context, R.string.failed_to_save.string, Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                val saved = saveFileToMediaStore(
+                    context = context,
+                    file = localFile,
+                    displayName = resource.filename.ifBlank { "attachment" },
+                    mimeType = resolveMimeType(resource, localFile)
+                )
+                if (saved) {
+                    Toast.makeText(context, R.string.saved_to_gallery.string, Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, R.string.failed_to_save.string, Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Throwable) {
+                Timber.d(e)
+                Toast.makeText(context, R.string.failed_to_save.string, Toast.LENGTH_SHORT).show()
+            } finally {
+                saving = false
+                menuExpanded = false
+            }
+        }
+    }
+
     AssistChip(
-        enabled = !opening,
+        enabled = !opening && !saving,
         onClick = {
-            if (onRemove == null) {
+            if (onRemove == null && !showMenu) {
                 openAttachment()
             } else {
                 menuExpanded = true
@@ -119,7 +172,7 @@ fun Attachment(
         }
     )
 
-    if (onRemove != null) {
+    if (onRemove != null || showMenu) {
         DropdownMenu(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false },
@@ -138,18 +191,32 @@ fun Attachment(
                 }
             )
             DropdownMenuItem(
-                text = { Text(R.string.remove.string) },
+                text = { Text(R.string.save_to_gallery.string) },
                 onClick = {
-                    onRemove()
-                    menuExpanded = false
+                    saveAttachment()
                 },
                 leadingIcon = {
                     Icon(
-                        Icons.Outlined.Delete,
+                        Icons.Outlined.Save,
                         contentDescription = null
                     )
                 }
             )
+            if (onRemove != null) {
+                DropdownMenuItem(
+                    text = { Text(R.string.remove.string) },
+                    onClick = {
+                        onRemove()
+                        menuExpanded = false
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Delete,
+                            contentDescription = null
+                        )
+                    }
+                )
+            }
         }
     }
 }
@@ -226,4 +293,53 @@ private fun resolveMimeType(resource: ResourceRepresentable, file: File): String
         return "*/*"
     }
     return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
+}
+
+private suspend fun saveFileToMediaStore(
+    context: Context,
+    file: File,
+    displayName: String,
+    mimeType: String
+): Boolean = withContext(Dispatchers.IO) {
+    runCatching {
+        val resolvedMime = mimeType.takeIf { it.isNotBlank() && it != "*/*" } ?: "application/octet-stream"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val collection = when {
+                resolvedMime.startsWith("image/") -> MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                resolvedMime.startsWith("video/") -> MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                else -> MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            }
+            val resolver = context.contentResolver
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                put(MediaStore.MediaColumns.MIME_TYPE, resolvedMime)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(collection, values)
+                ?: return@runCatching false
+            resolver.openOutputStream(uri)?.use { output ->
+                file.inputStream().use { input ->
+                    input.copyTo(output)
+                }
+            } ?: return@runCatching false
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            true
+        } else {
+            val dir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "MoeMemos"
+            ).also { it.mkdirs() }
+            val target = File(dir, displayName)
+            file.copyTo(target, overwrite = true)
+            MediaScannerConnection.scanFile(
+                context,
+                arrayOf(target.absolutePath),
+                arrayOf(resolvedMime),
+                null
+            )
+            true
+        }
+    }.getOrDefault(false)
 }
