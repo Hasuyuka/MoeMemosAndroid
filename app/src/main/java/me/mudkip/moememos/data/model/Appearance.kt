@@ -46,3 +46,26 @@ enum class FontScale(val factor: Float) {
     LARGE(1.15f),
     EXTRA_LARGE(1.3f),
 }
+
+/**
+ * 灵感页的布局。
+ *
+ * 三档的取舍是「一眼能看多少条」与「要不要图片预览」：
+ * 三列档刻意不显示附件图片——列窄了图片基本看不清，却照样要下载和解码，
+ * 反而让滚动变卡。
+ */
+@Serializable
+enum class ExploreLayout {
+    /** 现在的大卡片，一条一行，带图片。 */
+    LARGE,
+
+    /** 两列，保留图片预览。 */
+    TWO_COLUMN,
+
+    /** 三列，不显示图片，只有摘要。 */
+    THREE_COLUMN,
+    ;
+
+    /** 点一次换下一档；顺序即按钮的循环顺序。 */
+    fun next(): ExploreLayout = entries[(ordinal + 1) % entries.size]
+}

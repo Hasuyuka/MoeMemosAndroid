@@ -13,6 +13,8 @@ data class Settings(
     val dynamicColor: Boolean = true,
     /** 字号档位。默认不放大，与引入该设置之前的行为一致。 */
     val fontScale: FontScale = FontScale.DEFAULT,
+    /** 灵感页布局。默认大卡片，与引入该设置之前的行为一致。 */
+    val exploreLayout: ExploreLayout = ExploreLayout.LARGE,
     /**
      * 写入 settings_v3.json 时的结构版本。
      *

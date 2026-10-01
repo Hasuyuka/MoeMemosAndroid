@@ -14,6 +14,7 @@
     <string name="archived">归档</string>
     <string name="select">多选</string>
     <string name="select_all">全选</string>
+    <string name="change_layout">切换布局</string>
     <string name="selected_count">已选择 %1$d 项</string>
     <string name="delete_selected_confirm">删除选中的 %1$d 条备忘？此操作无法撤销。</string>
     <string name="settings">设置</string>
