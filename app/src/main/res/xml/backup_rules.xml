@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older that API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   备份规则（API 30 及以下，通过 AndroidManifest 的 android:fullBackupContent 引用）。
+   API 31+ 改用 data_extraction_rules.xml，两处排除项必须保持一致。
+
+   此处只写 <exclude>、不写 <include>，因此除下列两项外全部内容都会被备份
+   （`full-backup-content` 的语义是：未显式排除的都会被包含）。
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- 访问令牌密文：密钥在 AndroidKeyStore，不随备份迁移，恢复后无法解密。 -->
+    <exclude domain="sharedpref" path="secure_tokens.xml" />
+
+    <!-- mTLS 客户端证书别名：证书与私钥在系统 KeyChain，不随备份迁移。 -->
+    <exclude domain="sharedpref" path="mtls.xml" />
 </full-backup-content>
