@@ -66,6 +66,7 @@
     <string name="share">分享</string>
     <string name="copy">複製</string>
     <string name="copy_link">複製連結</string>
+    <string name="open_owning_memo">開啟所屬筆記</string>
     <string name="open">打開</string>
     <string name="archive">歸檔</string>
     <string name="memo_visibility_public">訪客可見</string>

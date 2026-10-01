@@ -79,6 +79,7 @@
     <string name="share">Share</string>
     <string name="copy">Copy</string>
     <string name="copy_link">Copy Link</string>
+    <string name="open_owning_memo">Open its memo</string>
     <string name="open">Open</string>
     <string name="archive">Archive</string>
     <string name="memo_visibility_public">Visible to guests</string>
