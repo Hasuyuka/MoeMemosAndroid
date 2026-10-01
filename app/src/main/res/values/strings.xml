@@ -15,6 +15,12 @@
     <string name="select">Select</string>
     <string name="select_all">Select all</string>
     <string name="change_layout">Switch layout</string>
+    <string name="image_quality">Upload image quality</string>
+    <string name="image_quality_summary">Compresses JPEG/PNG attachments before upload. GIF and other formats are left untouched.</string>
+    <string name="image_quality_original">Original</string>
+    <string name="image_quality_high">High (2048px)</string>
+    <string name="image_quality_medium">Medium (1440px)</string>
+    <string name="image_quality_low">Low (1080px)</string>
     <string name="selected_count">%1$d selected</string>
     <string name="delete_selected_confirm">Delete the %1$d selected memos? This cannot be undone.</string>
     <string name="settings">Settings</string>

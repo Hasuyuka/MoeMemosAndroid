@@ -165,7 +165,11 @@ class AccountService @Inject constructor(
                     database.memoDao(),
                     fileStorage,
                     remote,
-                    account
+                    account,
+                    // 上传图片品质从设置里读；默认原图，用户不动就没有任何变化。
+                    imageQualityProvider = {
+                        context.settingsDataStore.data.first().imageQuality
+                    },
                 ) { user ->
                     updateAccountFromSyncedUser(account.accountKey(), user)
                 }
@@ -179,7 +183,11 @@ class AccountService @Inject constructor(
                     database.memoDao(),
                     fileStorage,
                     remote,
-                    account
+                    account,
+                    // 上传图片品质从设置里读；默认原图，用户不动就没有任何变化。
+                    imageQualityProvider = {
+                        context.settingsDataStore.data.first().imageQuality
+                    },
                 ) { user ->
                     updateAccountFromSyncedUser(account.accountKey(), user)
                 }

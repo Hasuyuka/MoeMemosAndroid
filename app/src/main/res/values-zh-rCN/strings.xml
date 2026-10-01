@@ -15,6 +15,12 @@
     <string name="select">多选</string>
     <string name="select_all">全选</string>
     <string name="change_layout">切换布局</string>
+    <string name="image_quality">上传图片品质</string>
+    <string name="image_quality_summary">上传前压缩 JPEG / PNG 附件；GIF 等格式不做处理。</string>
+    <string name="image_quality_original">原图</string>
+    <string name="image_quality_high">高（2048px）</string>
+    <string name="image_quality_medium">中（1440px）</string>
+    <string name="image_quality_low">低（1080px）</string>
     <string name="selected_count">已选择 %1$d 项</string>
     <string name="delete_selected_confirm">删除选中的 %1$d 条备忘？此操作无法撤销。</string>
     <string name="settings">设置</string>
