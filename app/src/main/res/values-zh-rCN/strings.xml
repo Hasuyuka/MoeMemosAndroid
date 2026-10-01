@@ -106,6 +106,7 @@
     <string name="no_memos">未找到 MEMO</string>
     <string name="no_search_results">没有找到“%1$s”的结果</string>
     <string name="recent_searches">最近搜索</string>
+    <string name="include_archived">包含归档</string>
     <string name="clear_search_history">清空历史</string>
     <string name="no_memos_with_tag">没有这个标签的 MEMO</string>
     <string name="no_images">没有找到图片</string>

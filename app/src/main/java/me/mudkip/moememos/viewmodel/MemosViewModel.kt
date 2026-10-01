@@ -58,6 +58,13 @@ class MemosViewModel @Inject constructor(
     var matrix by mutableStateOf(DailyUsageStat.initialMatrix)
         private set
 
+    /**
+     * 归档备忘。**按需加载**：只有搜索页切到「包含归档」时才会去查，
+     * 日常浏览不为它付出任何代价。底层是本地 DAO 查询（不走网络），所以代价很低。
+     */
+    var archivedMemos = mutableStateListOf<MemoEntity>()
+        private set
+
     val host: StateFlow<String?> =
         accountService.currentAccount
             .map { it?.getAccountInfo()?.host }
@@ -108,6 +115,24 @@ class MemosViewModel @Inject constructor(
 
     suspend fun refreshLocalSnapshot() = withContext(viewModelScope.coroutineContext) {
         loadMemosSnapshot()
+    }
+
+    /**
+     * 加载归档备忘，供搜索页的「包含归档」范围使用。
+     *
+     * AbstractMemoRepository.listArchivedMemos 的实现是纯本地 DAO 查询
+     * （SyncingRepository.kt:93），因此这里不会触发网络请求，重复调用也安全。
+     */
+    suspend fun loadArchivedMemos() = withContext(viewModelScope.coroutineContext) {
+        when (val response = memoService.getRepository().listArchivedMemos()) {
+            is ApiResponse.Success -> {
+                archivedMemos.clear()
+                archivedMemos.addAll(response.data)
+            }
+            else -> {
+                errorMessage = response.getErrorMessage()
+            }
+        }
     }
 
     suspend fun awaitInitialLoad() {

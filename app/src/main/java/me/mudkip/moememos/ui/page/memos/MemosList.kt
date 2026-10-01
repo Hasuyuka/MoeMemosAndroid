@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
+import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.MemoEditGesture
 import me.mudkip.moememos.data.model.Settings
@@ -57,6 +58,8 @@ fun MemosList(
     onRefresh: (suspend () -> Unit)? = null,
     onTagClick: ((String) -> Unit)? = null,
     onMemoClick: ((String) -> Unit)? = null,
+    /** 数据源覆盖：为 null 时用 LocalMemos 的列表（默认行为，其它调用方不受影响）。 */
+    memos: List<MemoEntity>? = null,
     /** 列表顶部的可选插槽（例如搜索页的最近搜索）。为 null 时行为与从前完全一致。 */
     header: (@Composable () -> Unit)? = null,
 ) {
@@ -74,9 +77,10 @@ fun MemosList(
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
     var syncAlert by remember { mutableStateOf<PullRefreshSyncAlert?>(null) }
-    val filteredMemos = remember(viewModel.memos.toList(), tag, searchString) {
-        val pinned = viewModel.memos.filter { it.pinned }
-        val nonPinned = viewModel.memos.filter { !it.pinned }
+    val sourceMemos = memos ?: viewModel.memos
+    val filteredMemos = remember(sourceMemos.toList(), tag, searchString) {
+        val pinned = sourceMemos.filter { it.pinned }
+        val nonPinned = sourceMemos.filter { !it.pinned }
         var fullList = pinned + nonPinned
 
         tag?.let { tag ->
