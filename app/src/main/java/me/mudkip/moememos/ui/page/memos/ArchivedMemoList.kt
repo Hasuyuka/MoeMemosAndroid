@@ -9,14 +9,16 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import me.mudkip.moememos.ui.util.edgeToEdgeContentPadding
 import me.mudkip.moememos.ui.component.ArchivedMemoCard
+import me.mudkip.moememos.ui.util.MemoSelectionState
+import me.mudkip.moememos.ui.util.edgeToEdgeContentPadding
 import me.mudkip.moememos.viewmodel.ArchivedMemoListViewModel
 import me.mudkip.moememos.viewmodel.LocalArchivedMemos
 
 @Composable
 fun ArchivedMemoList(
     viewModel: ArchivedMemoListViewModel = hiltViewModel(),
+    selection: MemoSelectionState? = null,
     contentPadding: PaddingValues
 ) {
     val listContentPadding = edgeToEdgeContentPadding(contentPadding)
@@ -27,7 +29,12 @@ fun ArchivedMemoList(
             contentPadding = listContentPadding
         ) {
             items(viewModel.memos, key = { it.identifier }) { memo ->
-                ArchivedMemoCard(memo)
+                ArchivedMemoCard(
+                    memo = memo,
+                    selectionMode = selection?.isSelecting == true,
+                    selected = selection?.selected?.contains(memo.identifier) == true,
+                    onToggleSelection = { selection?.toggle(memo.identifier) },
+                )
             }
         }
     }
