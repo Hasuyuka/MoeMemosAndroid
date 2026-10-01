@@ -33,6 +33,27 @@ interface MemoDao {
     """)
     fun observeAllMemos(accountKey: String): Flow<List<MemoWithResources>>
 
+    /**
+     * 与 [observeAllMemos] 同一条件的挂起版本，供一次性加载使用。
+     *
+     * 存在的意义：此前一次性加载走 [getAllMemos] 之后逐条调用 `getMemoResources`，
+     * 是典型的 N+1——5000 条备忘要发 5001 次查询（这正是 issue #369「5000 条加载很慢」
+     * 的直接来源之一）。Room 会把 `@Relation` 解析成**一次**批量查询
+     * （`WHERE memoId IN (...)`），因此这里总共只需 2 次。
+     */
+    @Transaction
+    @Query("""
+        SELECT * FROM memos
+        WHERE accountKey = :accountKey AND archived = 0 AND isDeleted = 0
+        ORDER BY pinned DESC, date DESC
+    """)
+    suspend fun getAllMemosWithResources(accountKey: String): List<MemoWithResources>
+
+    /** [getArchivedMemos] 的 JOIN 版本，理由同上。 */
+    @Transaction
+    @Query("SELECT * FROM memos WHERE accountKey = :accountKey AND archived = 1 ORDER BY date DESC")
+    suspend fun getArchivedMemosWithResources(accountKey: String): List<MemoWithResources>
+
     @Query("SELECT * FROM memos WHERE accountKey = :accountKey")
     suspend fun getAllMemosForSync(accountKey: String): List<MemoEntity>
 
