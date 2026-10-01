@@ -28,3 +28,21 @@ enum class ThemeMode {
         DARK -> true
     }
 }
+
+/**
+ * 字号档位。
+ *
+ * [factor] 是相对于**系统字号**的倍数。实现上把它乘进 Compose 的 `fontScale`
+ * （见 `MoeMemosTheme`），因此与系统字号设置是**相乘**关系而不是覆盖：
+ * 用户已经在系统里调大过字号时，应用内的档位会在此基础上继续放大。
+ *
+ * 数值刻意保持克制（0.85 ~ 1.3）：档位再大时，卡片、工具栏这类高度固定的布局
+ * 容易把文字裁掉，而这类问题在本机无法验证，需要真机逐页确认。
+ */
+@Serializable
+enum class FontScale(val factor: Float) {
+    SMALL(0.85f),
+    DEFAULT(1.0f),
+    LARGE(1.15f),
+    EXTRA_LARGE(1.3f),
+}

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
@@ -47,6 +48,7 @@ import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.MemoEditGesture
+import me.mudkip.moememos.data.model.FontScale
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.data.model.ThemeMode
 import me.mudkip.moememos.data.model.currentUserSettings
@@ -82,6 +84,7 @@ fun SettingsPage(
     }
     var showEditGestureDialog by remember { mutableStateOf(false) }
     var showThemeModeDialog by remember { mutableStateOf(false) }
+    var showFontScaleDialog by remember { mutableStateOf(false) }
     val dynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     var showRemoveCertificateDialog by remember { mutableStateOf(false) }
     var hasClientCertificate by remember {
@@ -150,6 +153,14 @@ fun SettingsPage(
         scope.launch(Dispatchers.IO) {
             context.settingsDataStore.updateData { existingSettings ->
                 existingSettings.copy(dynamicColor = enabled)
+            }
+        }
+    }
+
+    fun setFontScale(scale: FontScale) {
+        scope.launch(Dispatchers.IO) {
+            context.settingsDataStore.updateData { existingSettings ->
+                existingSettings.copy(fontScale = scale)
             }
         }
     }
@@ -327,6 +338,21 @@ fun SettingsPage(
                     enabled = dynamicColorSupported,
                     onCheckedChange = ::setDynamicColorEnabled,
                 )
+            }
+
+            item {
+                SettingItem(
+                    icon = Icons.Outlined.FormatSize,
+                    text = R.string.font_scale.string,
+                    trailingIcon = {
+                        Text(
+                            text = settings.fontScale.titleResource.string,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                ) {
+                    showFontScaleDialog = true
+                }
             }
 
             item {
@@ -531,6 +557,42 @@ fun SettingsPage(
             }
         )
     }
+
+    if (showFontScaleDialog) {
+        AlertDialog(
+            onDismissRequest = { showFontScaleDialog = false },
+            title = { Text(R.string.font_scale.string) },
+            text = {
+                LazyColumn {
+                    items(FontScale.entries.size) { index ->
+                        val scale = FontScale.entries[index]
+                        TextButton(
+                            onClick = {
+                                showFontScaleDialog = false
+                                setFontScale(scale)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = scale.titleResource.string,
+                                color = if (scale == settings.fontScale) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFontScaleDialog = false }) {
+                    Text(R.string.close.string)
+                }
+            }
+        )
+    }
 }
 
 private val ThemeMode.titleResource: Int
@@ -538,6 +600,14 @@ private val ThemeMode.titleResource: Int
         ThemeMode.SYSTEM -> R.string.theme_mode_system
         ThemeMode.LIGHT -> R.string.theme_mode_light
         ThemeMode.DARK -> R.string.theme_mode_dark
+    }
+
+private val FontScale.titleResource: Int
+    get() = when (this) {
+        FontScale.SMALL -> R.string.font_scale_small
+        FontScale.DEFAULT -> R.string.font_scale_default
+        FontScale.LARGE -> R.string.font_scale_large
+        FontScale.EXTRA_LARGE -> R.string.font_scale_extra_large
     }
 
 private val MemoEditGesture.titleResource: Int
