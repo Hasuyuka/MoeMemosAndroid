@@ -140,6 +140,11 @@
     <string name="dynamic_color">動態取色</string>
     <string name="dynamic_color_summary">使用桌布取色（Android 12 以上）</string>
     <string name="dynamic_color_unavailable">需要 Android 12 或更新版本</string>
+    <string name="font_scale">字級</string>
+    <string name="font_scale_small">小</string>
+    <string name="font_scale_default">預設</string>
+    <string name="font_scale_large">大</string>
+    <string name="font_scale_extra_large">特大</string>
     <string name="local_network_access">區域網路存取</string>
     <string name="local_network_access_denied">請在設定中允許存取附近的裝置，然後重試連線至區域網路上的 Memos 伺服器。已儲存的筆記仍可離線使用。</string>
     <string name="access_token">存取權杖</string>

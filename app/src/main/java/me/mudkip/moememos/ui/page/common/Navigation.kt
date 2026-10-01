@@ -76,6 +76,7 @@ fun Navigation() {
         MoeMemosTheme(
             darkTheme = settings?.themeMode?.isDark(systemInDarkTheme) ?: systemInDarkTheme,
             dynamicColor = settings?.dynamicColor ?: true,
+            fontScale = settings?.fontScale?.factor ?: 1f,
         ) {
             MemosNavHost(
                 navController = navController,

@@ -11,6 +11,8 @@ data class Settings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     /** 是否使用 Material You 动态取色。仅 Android 12（API 31）及以上生效。 */
     val dynamicColor: Boolean = true,
+    /** 字号档位。默认不放大，与引入该设置之前的行为一致。 */
+    val fontScale: FontScale = FontScale.DEFAULT,
     /**
      * 写入 settings_v3.json 时的结构版本。
      *

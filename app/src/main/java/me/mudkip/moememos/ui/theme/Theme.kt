@@ -12,9 +12,13 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Density
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
@@ -122,6 +126,8 @@ fun MoeMemosTheme(
         darkTheme: Boolean = isSystemInDarkTheme(),
         // Dynamic color is available on Android 12+
         dynamicColor: Boolean = true,
+        /** 相对系统字号的倍数，见 [me.mudkip.moememos.data.model.FontScale]。1f 表示不缩放。 */
+        fontScale: Float = 1f,
         content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -154,6 +160,21 @@ fun MoeMemosTheme(
     MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,
-            content = content
+            content = {
+                // 字号档位只改写 fontScale，保留系统 density——dp 布局完全不受影响，
+                // 仅 sp 文本按档位缩放。写成 fontScale * factor 而不是直接赋值，
+                // 是为了与用户在系统里设置的字号相乘而非覆盖。
+                val density = LocalDensity.current
+                val scaledDensity = remember(density, fontScale) {
+                    if (fontScale == 1f) {
+                        density
+                    } else {
+                        Density(density.density, density.fontScale * fontScale)
+                    }
+                }
+                CompositionLocalProvider(LocalDensity provides scaledDensity) {
+                    content()
+                }
+            }
     )
 }

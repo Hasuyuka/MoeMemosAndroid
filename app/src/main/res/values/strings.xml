@@ -164,6 +164,11 @@
     <string name="dynamic_color">Dynamic color</string>
     <string name="dynamic_color_summary">Use colors from your wallpaper (Android 12+)</string>
     <string name="dynamic_color_unavailable">Requires Android 12 or newer</string>
+    <string name="font_scale">Text size</string>
+    <string name="font_scale_small">Small</string>
+    <string name="font_scale_default">Default</string>
+    <string name="font_scale_large">Large</string>
+    <string name="font_scale_extra_large">Extra large</string>
     <string name="local_network_access">Local network access</string>
     <string name="local_network_access_denied">Allow Nearby devices access in Settings to connect to your Memos server on the local network, then try again. Your saved memos remain available offline.</string>
     <string name="more_options">More options</string>
