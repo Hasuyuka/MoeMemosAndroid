@@ -93,7 +93,9 @@ class MemoryGlanceWidget : GlanceAppWidget() {
                         error = null
                     }
                 } catch (e: Exception) {
-                    error = e.message ?: "Unknown error"
+                    // 用已翻译的 error_unknown，而不是写死的英文兜底；
+                    // e.message 本身来自异常，无法翻译，只作为更具体的信息优先使用。
+                    error = e.message ?: context.getString(R.string.error_unknown)
                     Timber.tag("MemoryWidget").e(e, "Exception in memory widget")
                 } finally {
                     isLoading = false

@@ -41,6 +41,13 @@
     <string name="day">天</string>
     <string name="user_state_not_found">使用者狀態丟失</string>
     <string name="cancel">取消</string>
+    <string name="save">儲存</string>
+    <string name="discard">捨棄</string>
+    <string name="save_changes_title">儲存變更？</string>
+    <string name="save_changes_message">結束前要儲存變更嗎？</string>
+    <string name="none">無</string>
+    <string name="pinned">已置頂</string>
+    <string name="visibility_not_public">非公開</string>
     <string name="confirm">確認</string>
     <string name="delete_this_memo">確認刪除這條 MEMO 嗎？</string>
     <string name="delete">刪除</string>
