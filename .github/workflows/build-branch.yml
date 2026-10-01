@@ -10,8 +10,10 @@ on:
   push:
     branches:
       - "**"
-  pull_request:
   workflow_dispatch:
+
+# 刻意不监听 pull_request：push 已经为同一个 SHA 触发了运行，check run 挂在该 commit 上、
+# PR 里照样可见。再监听 pull_request 只会让每个分支白跑一遍，浪费一半 CI 配额。
 
 concurrency:
   group: build-${{ github.ref }}
@@ -21,8 +23,8 @@ permissions:
   contents: read
 
 jobs:
-  assemble-debug:
-    name: assembleDebug
+  build-and-test:
+    name: build + unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -50,6 +52,18 @@ jobs:
 
       - name: Compile debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.run_id }}
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Report summary
         if: always()
