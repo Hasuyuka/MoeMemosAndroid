@@ -62,6 +62,7 @@ import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.service.MemoService
 import me.mudkip.moememos.ext.settingsDataStore
 import me.mudkip.moememos.ui.security.AppLockSession
+import me.mudkip.moememos.util.contentHasTag
 import timber.log.Timber
 import java.time.Instant
 
@@ -128,7 +129,10 @@ class MoeMemosGlanceWidget : GlanceAppWidget() {
                     memoService.getRepository().listMemos().suspendOnSuccess {
                         // Filter and sort memos
                         val filteredMemos = data.filter { memo ->
-                            val matchesTag = filterTag == null || memo.content.contains("#$filterTag")
+                            // 与列表页共用同一套标签口径（contentHasTag）：
+                            // 小组件的标签筛选此前也是 contains("#$filterTag")，
+                            // 会有同样的前缀误匹配问题。
+                            val matchesTag = filterTag == null || contentHasTag(memo.content, filterTag)
                             val matchesPinned = !pinnedOnly || memo.pinned
                             matchesTag && matchesPinned
                         }

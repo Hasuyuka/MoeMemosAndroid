@@ -42,6 +42,8 @@ import me.mudkip.moememos.ui.component.MemosCard
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.util.edgeToEdgeContentPadding
 import me.mudkip.moememos.ui.page.common.RouteName
+import me.mudkip.moememos.util.contentHasTag
+import me.mudkip.moememos.util.contentMatchesKeyword
 import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
 import me.mudkip.moememos.viewmodel.ManualSyncResult
@@ -84,17 +86,12 @@ fun MemosList(
         var fullList = pinned + nonPinned
 
         tag?.let { tag ->
-            fullList = fullList.filter { memo ->
-                memo.content.contains("#$tag") ||
-                        memo.content.contains("#$tag/")
-            }
+            fullList = fullList.filter { memo -> contentHasTag(memo.content, tag) }
         }
 
         searchString?.let { searchString ->
-            if (searchString.isNotEmpty()) {
-                fullList = fullList.filter { memo ->
-                    memo.content.contains(searchString, true)
-                }
+            fullList = fullList.filter { memo ->
+                contentMatchesKeyword(memo.content, searchString)
             }
         }
 
