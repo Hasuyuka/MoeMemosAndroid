@@ -104,6 +104,8 @@
     <string name="loading">加载中…</string>
     <string name="error_unknown">未知错误</string>
     <string name="no_memos">未找到 MEMO</string>
+    <string name="no_search_results">没有找到“%1$s”的结果</string>
+    <string name="no_memos_with_tag">没有这个标签的 MEMO</string>
     <string name="no_images">没有找到图片</string>
     <string name="no_resources">没有找到资源</string>
     <string name="failed_to_load_resources">资源加载失败</string>
