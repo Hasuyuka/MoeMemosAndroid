@@ -12,6 +12,7 @@ permissions:
 jobs:
   build-release-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Validate tag format
@@ -21,6 +22,51 @@ jobs:
             echo "Tag '$TAG' is not supported. Expected formats: 0.9.0, 0.9.0-alpha.0, or 0.9.0-beta.0"
             exit 1
           fi
+
+      # 版本号的唯一来源就是 tag。之前 tag 只用于重命名 APK，
+      # 而 versionName 来自 app/build.gradle 里的硬编码，两者会脱节——
+      # 曾出现「tag 2.0.6、APK 内声明 2.0.5」的名不符实产物。
+      - name: Compute version from tag
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION_NAME="${TAG#v}"
+
+          CORE="${VERSION_NAME%%-*}"
+          PRE=""
+          if [[ "$VERSION_NAME" == *-* ]]; then PRE="${VERSION_NAME#*-}"; fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CORE"
+          BASE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          if (( BASE > 2100000 )); then
+            echo "版本号过大，会超出 Android versionCode 上限: $CORE" >&2
+            exit 1
+          fi
+
+          # 编码规则：BASE * 1000 + 阶段 * 100 + 序号
+          #   阶段: alpha=0, beta=1, 正式=2 —— 保证同版本内 alpha < beta < 正式，
+          #   且下一个版本的 alpha 一定大于上一个版本的正式版（单调递增）。
+          if [[ -z "$PRE" ]]; then
+            STAGE=2; NUM=0
+          elif [[ "$PRE" == alpha.* ]]; then
+            STAGE=0; NUM="${PRE#alpha.}"
+          elif [[ "$PRE" == beta.* ]]; then
+            STAGE=1; NUM="${PRE#beta.}"
+          else
+            echo "不支持的预发布后缀: $PRE" >&2
+            exit 1
+          fi
+          if (( NUM > 99 )); then
+            echo "预发布序号必须 <= 99，当前为 $NUM" >&2
+            exit 1
+          fi
+
+          VERSION_CODE=$((BASE * 1000 + STAGE * 100 + NUM))
+          {
+            echo "versionName=$VERSION_NAME"
+            echo "versionCode=$VERSION_CODE"
+          } >> "$GITHUB_ENV"
+          echo "tag=$TAG -> versionName=$VERSION_NAME versionCode=$VERSION_CODE"
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,7 +112,45 @@ jobs:
               exit 1
             fi
           done
-          ./gradlew :app:assembleRelease
+          ./gradlew :app:assembleRelease \
+            -PappVersionName="$versionName" \
+            -PappVersionCode="$versionCode"
+
+      # 最后一道闸门：真的去读刚构建出来的 APK，而不是相信构建配置。
+      # 这条断言就是用来堵住「tag 与 APK 内版本脱节」那类事故的。
+      - name: Verify APK version matches the tag
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          if [[ ! -f "$APK" ]]; then
+            echo "::error::找不到 APK: $APK"
+            exit 1
+          fi
+
+          TOOL=""
+          for name in aapt aapt2; do
+            candidate="$(find "$ANDROID_HOME/build-tools" -name "$name" -type f 2>/dev/null | sort -V | tail -1 || true)"
+            if [[ -n "$candidate" ]]; then TOOL="$candidate"; break; fi
+          done
+          if [[ -z "$TOOL" ]]; then
+            echo "::error::在 \$ANDROID_HOME/build-tools 下找不到 aapt/aapt2"
+            exit 1
+          fi
+          echo "使用 $TOOL"
+
+          BADGING="$("$TOOL" dump badging "$APK" | head -1)"
+          echo "$BADGING"
+          GOT_NAME="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<< "$BADGING")"
+          GOT_CODE="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" <<< "$BADGING")"
+
+          echo "APK 内声明 : versionName=$GOT_NAME versionCode=$GOT_CODE"
+          echo "tag 期望值 : versionName=$versionName versionCode=$versionCode"
+
+          if [[ "$GOT_NAME" != "$versionName" || "$GOT_CODE" != "$versionCode" ]]; then
+            echo "::error::APK 内声明的版本与 tag 不一致，拒绝发布这个包"
+            exit 1
+          fi
+          echo "✅ 版本一致"
 
       - name: Rename APK with tag
         run: |
