@@ -135,6 +135,9 @@
     <string name="loading">Loading…</string>
     <string name="error_unknown">Unknown error</string>
     <string name="no_memos">No memos found</string>
+    <string name="no_images">No images found</string>
+    <string name="no_resources">No resources found</string>
+    <string name="failed_to_load_resources">Could not load resources</string>
     <string name="memo_not_found">Memo not found</string>
     <string name="filter_by_tag">Filter by tag</string>
     <string name="pinned_only">Show only pinned items.</string>
