@@ -123,6 +123,14 @@
     <string name="max_items">最大条目数</string>
     <string name="refresh">刷新</string>
     <string name="widget_locked_message">已锁定，点按解锁</string>
+    <string name="appearance">外观</string>
+    <string name="theme_mode">主题</string>
+    <string name="theme_mode_system">跟随系统</string>
+    <string name="theme_mode_light">浅色</string>
+    <string name="theme_mode_dark">深色</string>
+    <string name="dynamic_color">动态取色</string>
+    <string name="dynamic_color_summary">使用壁纸取色（Android 12 及以上）</string>
+    <string name="dynamic_color_unavailable">需要 Android 12 或更高版本</string>
     <string name="local_network_access">本地网络访问</string>
     <string name="local_network_access_denied">请在设置中允许访问附近的设备，然后重试连接本地网络上的 Memos 服务器。已保存的笔记仍可离线使用。</string>
     <string name="access_token">访问令牌</string>
