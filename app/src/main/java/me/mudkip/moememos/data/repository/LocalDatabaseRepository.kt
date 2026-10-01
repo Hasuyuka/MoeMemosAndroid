@@ -45,6 +45,26 @@ class LocalDatabaseRepository(
         return memoDao.getMemoById(identifier, accountKey)?.let { withResources(it) }
     }
 
+    override suspend fun listMemosFiltered(
+        tag: String?,
+        pinnedOnly: Boolean,
+        limit: Int
+    ): ApiResponse<List<MemoEntity>> {
+        return try {
+            ApiResponse.Success(memoDao.getMemosFiltered(accountKey, tag, pinnedOnly, limit))
+        } catch (e: Exception) {
+            ApiResponse.Failure.Exception(e)
+        }
+    }
+
+    override suspend fun randomMemo(): ApiResponse<MemoEntity?> {
+        return try {
+            ApiResponse.Success(memoDao.getRandomMemo(accountKey))
+        } catch (e: Exception) {
+            ApiResponse.Failure.Exception(e)
+        }
+    }
+
     override suspend fun listArchivedMemos(): ApiResponse<List<MemoEntity>> {
         return try {
             val memos = memoDao.getArchivedMemosWithResources(accountKey).map { it.toMemoEntity() }

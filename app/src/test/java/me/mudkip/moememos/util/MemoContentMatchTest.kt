@@ -1,5 +1,6 @@
 package me.mudkip.moememos.util
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -129,5 +130,36 @@ class MemoContentMatchTest {
     fun `关键字不命中时返回 false`() {
         assertFalse(contentMatchesKeyword("Hello World", "memos"))
         assertFalse(contentMatchesKeyword("", "memos"))
+    }
+
+    // ---------- 与 DAO 下推的一致性（绊线） ----------
+
+    @Test
+    fun `DAO 下推用的 SQL 条件与 contentHasTag 等价`() {
+        // MemoDao.getMemosFiltered 里的标签条件是 `instr(content, '#' || :tag) > 0`，
+        // 也就是 Kotlin 的 content.contains("#$tag")——即 contentHasTag 的第一个分支
+        // （第二个分支 `"#$tag/"` 被第一个完全包含，等价性见该类注释）。
+        //
+        // 这条用例把「两边口径一致」写成可执行断言：将来若有人改了 contentHasTag
+        // （例如修 D-26 改成 token 语义），这里会失败，提醒他 DAO 里那份 SQL 必须一起改。
+        // 这是唯一能在单元测试里守住的环节——SQL 本身要真机或 Room 测试才能跑。
+        val cases = listOf(
+            "#work 买了咖啡" to "work",
+            "#workout 健身" to "work",
+            "#work/sub 会议" to "work",
+            "#Work" to "work",
+            "今天 #work" to "work",
+            "##work" to "work",
+            "没有标签" to "work",
+            "```\n#work\n```" to "work",
+            "https://example.com/#work" to "work",
+        )
+        cases.forEach { (content, tag) ->
+            assertEquals(
+                "contentHasTag 与 DAO 的 SQL 条件在 [$content] / [$tag] 上不一致",
+                content.contains("#$tag"),
+                contentHasTag(content, tag),
+            )
+        }
     }
 }

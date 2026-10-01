@@ -20,6 +20,24 @@ abstract class AbstractMemoRepository {
 
     abstract suspend fun listMemos(): ApiResponse<List<MemoEntity>>
     abstract suspend fun listArchivedMemos(): ApiResponse<List<MemoEntity>>
+
+    /**
+     * 按标签/置顶筛选并限制条数的备忘列表。
+     *
+     * 与 [listMemos] 的区别：筛选、排序与截断都在数据层完成，调用方拿到的是**最终结果**。
+     * 桌面小组件这类只需要前几条的场景用它——否则每次刷新都要把整张表（含每条的资源）
+     * 读进内存再自己过滤，备忘上万条时这个代价会直接体现在桌面刷新上。
+     *
+     * 注意：返回的实体**不挂载 `resources`**（正是为了省掉那次 JOIN）。需要资源的调用方用 [listMemos]。
+     */
+    abstract suspend fun listMemosFiltered(
+        tag: String?,
+        pinnedOnly: Boolean,
+        limit: Int
+    ): ApiResponse<List<MemoEntity>>
+
+    /** 随机取一条备忘，供「回忆」场景使用；没有可用备忘时返回 `ApiResponse.Success(null)`。 */
+    abstract suspend fun randomMemo(): ApiResponse<MemoEntity?>
     abstract suspend fun getMemo(identifier: String): MemoEntity?
     abstract suspend fun createMemo(content: String, visibility: MemoVisibility, resources: List<ResourceEntity>, tags: List<String>? = null, deferPush: Boolean = false): ApiResponse<MemoEntity>
     abstract suspend fun updateMemo(identifier: String, content: String? = null, resources: List<ResourceEntity>? = null, visibility: MemoVisibility? = null, tags: List<String>? = null, pinned: Boolean? = null, deferPush: Boolean = false): ApiResponse<MemoEntity>
