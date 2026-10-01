@@ -53,7 +53,15 @@ private const val MaxSelectableImages = 100
 fun MemoInputPage(
     viewModel: MemoInputViewModel = hiltViewModel(),
     memoIdentifier: String? = null,
-    shareContent: ShareContent? = null
+    shareContent: ShareContent? = null,
+    /**
+     * 从标签页进来时预填的标签。
+     *
+     * Memos 的标签就是正文里的 `#xxx`，所以这里直接填成 `#标签 `：
+     * 用户如果留着它，新备忘就落在那个标签页；改掉或删掉，就落到改动后实际包含的标签页；
+     * 一个标签都不留就回到总列表——这正是需要的语义，不用额外判断。
+     */
+    initialTag: String? = null
 ) {
     val focusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
@@ -71,9 +79,13 @@ fun MemoInputPage(
     var autosaveIdentifier by rememberSaveable { mutableStateOf(memo?.identifier) }
     var autosaveDirty by remember { mutableStateOf(false) }
     var exiting by remember { mutableStateOf(false) }
-    var initialContent by remember { mutableStateOf(memo?.content ?: "") }
+    // 编辑器打开时的初始正文。标签页进来时带上 `#标签 `，光标落在它后面。
+    val seedContent = remember(memoIdentifier, initialTag) {
+        memo?.content ?: seedContentForTag(initialTag)
+    }
+    var initialContent by remember { mutableStateOf(seedContent) }
     var text by rememberSaveable(stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(TextFieldValue(memo?.content ?: "", TextRange(memo?.content?.length ?: 0)))
+        mutableStateOf(TextFieldValue(seedContent, TextRange(seedContent.length)))
     }
     var visibilityMenuExpanded by remember { mutableStateOf(false) }
     var tagMenuExpanded by remember { mutableStateOf(false) }
