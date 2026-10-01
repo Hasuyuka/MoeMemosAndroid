@@ -43,7 +43,8 @@ import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.util.edgeToEdgeContentPadding
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.util.contentHasTag
-import me.mudkip.moememos.util.contentMatchesKeyword
+import me.mudkip.moememos.util.matches
+import me.mudkip.moememos.util.parseMemoQuery
 import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
 import me.mudkip.moememos.viewmodel.ManualSyncResult
@@ -90,8 +91,19 @@ fun MemosList(
         }
 
         searchString?.let { searchString ->
-            fullList = fullList.filter { memo ->
-                contentMatchesKeyword(memo.content, searchString)
+            if (searchString.isNotBlank()) {
+                // 支持 tag: / is: / visibility: / after: / before: 等前缀；
+                // 不认识的前缀会降级成普通关键字（见 util/MemoQuery.kt）。
+                val query = parseMemoQuery(searchString)
+                fullList = fullList.filter { memo ->
+                    query.matches(
+                        content = memo.content,
+                        pinned = memo.pinned,
+                        archived = memo.archived,
+                        memoVisibility = memo.visibility,
+                        createdDate = memo.date,
+                    )
+                }
             }
         }
 
