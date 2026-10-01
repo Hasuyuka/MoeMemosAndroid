@@ -18,8 +18,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import me.mudkip.moememos.MainActivity
 import me.mudkip.moememos.data.model.ShareContent
 import me.mudkip.moememos.ext.navigateToMemoEditor
@@ -98,8 +100,22 @@ fun Navigation() {
                     LoginPage(navController = navController)
                 }
 
-                composable(RouteName.INPUT) {
-                    MemoInputPage()
+                // tag 是可选的：不带 tag 进来时和以前一样是空白输入页（首页悬浮按钮、小组件、
+                // 快捷手势都走这条路，不能因为加了参数就断掉）。
+                composable(
+                    "${RouteName.INPUT}?tag={tag}",
+                    arguments = listOf(
+                        navArgument("tag") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { entry ->
+                    MemoInputPage(
+                        // Navigation 不会自己解码查询参数，这里和 TAG 路由一样手动解码。
+                        initialTag = entry.arguments?.getString("tag")?.let(Uri::decode)
+                    )
                 }
 
                 composable(RouteName.SHARE) {

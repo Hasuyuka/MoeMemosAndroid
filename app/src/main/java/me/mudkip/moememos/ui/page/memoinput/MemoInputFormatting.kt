@@ -4,6 +4,19 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import me.mudkip.moememos.data.constant.LIST_ITEM_SYMBOL_LIST
 
+/**
+ * 从标签页新建备忘时预填的正文：`#标签 `（末尾留一个空格，光标正好落在它后面）。
+ *
+ * 标签在 Memos 里就是正文里的 `#xxx`，所以预填成文本就自带了全部语义：
+ * 用户留着它就落进那个标签页，改掉就落进改动后的标签页，全删就回总列表。
+ * 不用为此做任何特判。
+ */
+internal fun seedContentForTag(tag: String?): String {
+    val normalized = tag?.trim()?.trimStart('#')?.trim()
+    if (normalized.isNullOrEmpty()) return ""
+    return "#$normalized "
+}
+
 internal enum class MarkdownFormat(
     val label: String,
     val prefix: String,
