@@ -20,6 +20,23 @@ def hasReleaseSigning = [
 // 逃生舱：只想到本地验证编译、接受未签名产物时用 -PallowUnsignedRelease。
 def allowUnsignedRelease = project.hasProperty("allowUnsignedRelease")
 
+// 版本号不再硬编码：CI 从 git tag 推导后通过 -PappVersionName / -PappVersionCode 注入。
+//
+// 起因是一次真实事故：release 标题与 APK 文件名都是 2.0.6，但 APK 内部声明的
+// versionName 却是 2.0.5（因为 tag 只被用于文件名，版本号仍来自这里的硬编码）。
+// 两者脱节会产出「名不符实」的安装包，用户装到的版本与看到的版本不一致。
+// 现在版本只有一个来源：tag。本地不带参数构建时回退到开发默认值。
+def appVersionName = "0.0.0-dev"
+def appVersionNameProperty = project.findProperty("appVersionName")
+if (appVersionNameProperty != null && !appVersionNameProperty.toString().trim().isEmpty()) {
+    appVersionName = appVersionNameProperty.toString().trim()
+}
+def appVersionCode = 1
+def appVersionCodeProperty = project.findProperty("appVersionCode")
+if (appVersionCodeProperty != null && !appVersionCodeProperty.toString().trim().isEmpty()) {
+    appVersionCode = appVersionCodeProperty.toString().trim().toInteger()
+}
+
 android {
     compileSdk = 37
     // Provides llvm-strip for native libraries bundled by AndroidX.
@@ -36,8 +53,8 @@ android {
         applicationId = "me.mudkip.moememos"
         minSdk = 26
         targetSdk = 37
-        versionCode = 50
-        versionName = "2.0.5"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
