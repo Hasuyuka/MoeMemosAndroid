@@ -1,6 +1,7 @@
 package me.mudkip.moememos.ui.component
 
 import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -11,8 +12,6 @@ import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.compose.foundation.layout.size
-import android.content.ClipData
-import android.content.ClipboardManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Attachment
