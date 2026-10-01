@@ -17,18 +17,31 @@ import me.mudkip.moememos.data.model.Memo
 
 @Composable
 fun ExploreMemoCard(
-    memo: Memo
+    memo: Memo,
+    /** 网格里用：收紧内外边距，正文只留摘要。 */
+    dense: Boolean = false,
+    /** 是否显示附件图片。三列档关掉，省下下载与解码。 */
+    showImages: Boolean = true,
 ) {
     Card(
         modifier = Modifier
-            .padding(horizontal = 15.dp, vertical = 10.dp)
+            .padding(
+                horizontal = if (dense) 4.dp else 15.dp,
+                vertical = if (dense) 4.dp else 10.dp,
+            )
             .fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(bottom = 10.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 15.dp, top = 15.dp, bottom = 10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = if (dense) 10.dp else 15.dp,
+                        top = if (dense) 10.dp else 15.dp,
+                        bottom = 10.dp,
+                    ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -47,7 +60,7 @@ fun ExploreMemoCard(
                 }
             }
 
-            MemoContent(memo, previewMode = false)
+            MemoContent(memo, previewMode = dense, showResources = showImages)
         }
     }
 }

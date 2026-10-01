@@ -41,6 +41,8 @@ import kotlin.math.ceil
 fun MemoContent(
     memo: MemoRepresentable,
     previewMode: Boolean = false,
+    /** 是否渲染附件（图片等）。三列布局那种窄格子里关掉，省下下载与解码。 */
+    showResources: Boolean = true,
     checkboxChange: (checked: Boolean, startOffset: Int, endOffset: Int) -> Unit = { _, _, _ -> },
     onViewMore: (() -> Unit)? = null,
     selectable: Boolean = false,
@@ -74,7 +76,9 @@ fun MemoContent(
             onTagClick = handleTagClick
         )
 
-        MemoResourceContent(memo)
+        if (showResources) {
+            MemoResourceContent(memo)
+        }
 
         if (previewed && onViewMore != null) {
             Row {

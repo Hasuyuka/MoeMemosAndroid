@@ -572,10 +572,11 @@ private fun MediaViewerPage(
             LivePhotoButton(
                 onClick = ::playMotionVideo,
                 modifier = Modifier
+                    // 保存按钮现在占了左上角，实况照片按钮往下让一格，两者不重叠。
                     .align(Alignment.TopStart)
                     .statusBarsPadding()
+                    .padding(top = 60.dp, start = 16.dp)
                     .graphicsLayer { alpha = pageOverlayAlpha }
-                    .padding(16.dp)
             )
         }
 
@@ -583,8 +584,9 @@ private fun MediaViewerPage(
             IconButton(
                 onClick = ::saveCurrentImage,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
+                    // 放左上角：底部那条通栏的说明文字会盖住原来的右下角位置，很难点中。
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
                     .graphicsLayer { alpha = pageOverlayAlpha }
                     .padding(12.dp)
             ) {

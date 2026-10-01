@@ -14,6 +14,7 @@
     <string name="archived">Archived</string>
     <string name="select">Select</string>
     <string name="select_all">Select all</string>
+    <string name="change_layout">Switch layout</string>
     <string name="selected_count">%1$d selected</string>
     <string name="delete_selected_confirm">Delete the %1$d selected memos? This cannot be undone.</string>
     <string name="settings">Settings</string>
