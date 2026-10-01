@@ -1,19 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   云备份与设备迁移的数据提取规则（API 31+，通过 AndroidManifest 的
+   android:dataExtractionRules 引用；API 30 及以下见 backup_rules.xml）。
+
+   策略：
+   本应用是本地优先，用户的备忘正文、附件、草稿与偏好都属于有价值的数据，
+   一律保留在备份中。这里只排除「跨设备恢复必然失效」的凭据类数据——
+   它们外流没有意义，而且会让恢复后的应用处于自相矛盾的状态。
+
+   注意：Android Auto Backup 有 25MB 上限，超过则整个应用的备份都不生效。
+   附件（files/resources/）体积可能较大，是否要给附件单独设限留待后续决策，
+   本次不改动用户数据范围。
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- 访问令牌。密文由 AndroidKeyStore 中的密钥加密（见 SecureTokenStorage.kt），
+             而 KeyStore 条目不会随备份迁移，恢复到新设备后必然解不开。
+             保留它只会让账户看起来「已登录」却发不出请求；排除后
+             getToken() 返回 null，401 会走已有的 accessTokenInvalid 流程提示重新登录。 -->
+        <exclude domain="sharedpref" path="secure_tokens.xml" />
+
+        <!-- mTLS 客户端证书别名。证书与私钥保存在系统 KeyChain，同样不随备份迁移。
+             保留会导致「显示已选择证书，但 TLS 握手失败」。 -->
+        <exclude domain="sharedpref" path="mtls.xml" />
     </cloud-backup>
-    <!--
+
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <!-- 设备间直接迁移时 KeyStore / KeyChain 也不会跟随，处理方式与云备份一致。 -->
+        <exclude domain="sharedpref" path="secure_tokens.xml" />
+        <exclude domain="sharedpref" path="mtls.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>
