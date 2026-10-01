@@ -61,6 +61,7 @@ import me.mudkip.moememos.data.model.MemoEditGesture
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.service.MemoService
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.ui.security.AppLockSession
 import timber.log.Timber
 import java.time.Instant
 
@@ -78,8 +79,9 @@ class MoeMemosGlanceWidget : GlanceAppWidget() {
         val openInEditor = settings.usersList
             .firstOrNull { it.accountKey == settings.currentUser }
             ?.settings?.editGesture == MemoEditGesture.SINGLE
+        val locked = AppLockSession.shouldHideContent(settings.appLockEnabled)
 
-        provideContent(createContent(context, memoService, openInEditor))
+        provideContent(createContent(context, memoService, openInEditor, locked))
     }
 
     // Keep composable lambda captures outside the coroutine state machine so Compose
@@ -87,16 +89,29 @@ class MoeMemosGlanceWidget : GlanceAppWidget() {
     private fun createContent(
         context: Context,
         memoService: MemoService,
-        openInEditor: Boolean
+        openInEditor: Boolean,
+        locked: Boolean
     ): @Composable () -> Unit = {
         val prefs = currentState<Preferences>()
         GlanceTheme {
-            WidgetContent(context, memoService, prefs, openInEditor)
+            WidgetContent(context, memoService, prefs, openInEditor, locked)
         }
     }
 
     @Composable
-    private fun WidgetContent(context: Context, memoService: MemoService, prefs: Preferences, openInEditor: Boolean) {
+    private fun WidgetContent(
+        context: Context,
+        memoService: MemoService,
+        prefs: Preferences,
+        openInEditor: Boolean,
+        locked: Boolean
+    ) {
+        if (locked) {
+            // 应用锁开启且处于锁定状态：不渲染任何备忘内容，也不去读数据库。
+            WidgetLockedContent(context, createOpenAppIntent(context))
+            return
+        }
+
         var memos by remember { mutableStateOf<List<MemoEntity>>(emptyList()) }
         var isLoading by remember { mutableStateOf(true) }
         var error by remember { mutableStateOf<String?>(null) }

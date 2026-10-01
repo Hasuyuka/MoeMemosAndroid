@@ -39,6 +39,7 @@ import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.model.MemoEditGesture
 import me.mudkip.moememos.data.service.MemoService
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.ui.security.AppLockSession
 import timber.log.Timber
 import java.time.Instant
 
@@ -54,8 +55,9 @@ class MemoryGlanceWidget : GlanceAppWidget() {
         val openInEditor = settings.usersList
             .firstOrNull { it.accountKey == settings.currentUser }
             ?.settings?.editGesture == MemoEditGesture.SINGLE
+        val locked = AppLockSession.shouldHideContent(settings.appLockEnabled)
 
-        provideContent(createContent(context, memoService, openInEditor))
+        provideContent(createContent(context, memoService, openInEditor, locked))
     }
 
     // Keep composable lambda captures outside the coroutine state machine so Compose
@@ -63,15 +65,22 @@ class MemoryGlanceWidget : GlanceAppWidget() {
     private fun createContent(
         context: Context,
         memoService: MemoService,
-        openInEditor: Boolean
+        openInEditor: Boolean,
+        locked: Boolean
     ): @Composable () -> Unit = {
         GlanceTheme {
-            WidgetContent(context, memoService, openInEditor)
+            WidgetContent(context, memoService, openInEditor, locked)
         }
     }
 
     @Composable
-    private fun WidgetContent(context: Context, memoService: MemoService, openInEditor: Boolean) {
+    private fun WidgetContent(context: Context, memoService: MemoService, openInEditor: Boolean, locked: Boolean) {
+        if (locked) {
+            // 应用锁开启且处于锁定状态：不渲染任何备忘内容，也不去读数据库。
+            WidgetLockedContent(context, createOpenAppIntent(context))
+            return
+        }
+
         var memo by remember { mutableStateOf<MemoEntity?>(null) }
         var isLoading by remember { mutableStateOf(true) }
         var error by remember { mutableStateOf<String?>(null) }

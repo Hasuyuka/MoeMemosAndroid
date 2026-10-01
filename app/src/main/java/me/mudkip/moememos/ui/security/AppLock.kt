@@ -48,6 +48,7 @@ import kotlinx.coroutines.flow.map
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Settings as AppSettings
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.widget.WidgetUpdater
 import timber.log.Timber
 
 private const val APP_LOCK_TIMEOUT_MILLIS = 60_000L
@@ -100,6 +101,19 @@ object AppLockSession {
         }
         return System.currentTimeMillis() - backgroundAt >= APP_LOCK_TIMEOUT_MILLIS
     }
+
+    /**
+     * 小组件是否应当隐藏备忘内容。
+     *
+     * 判定口径与 AppLockGate 的 locked 一致，但**只读不消费**：小组件渲染不能调用
+     * consumeForegroundTimeout，否则会把前台锁屏该处理的状态提前消费掉。
+     *
+     * 这里有一个有意为之的取舍：进程被系统回收后重新拉起时 isUnlocked 为 false，
+     * 所以即使刚刚解锁过，重启进程后小组件也会先显示为锁定，直到用户再次打开应用。
+     * 方向是安全的——宁可多锁一次，也不要因为「记不住」而把备忘正文泄到桌面上。
+     */
+    fun shouldHideContent(appLockEnabled: Boolean): Boolean =
+        appLockEnabled && (!isUnlocked || hasPendingTimeoutLock(appLockEnabled))
 
     fun consumeForegroundTimeout(appLockEnabled: Boolean) {
         if (handledForegroundGeneration == foregroundGeneration) {
@@ -250,6 +264,13 @@ fun AppLockGate(
     }
 
     val locked = appLockEnabled && (!AppLockSession.isUnlocked || pendingTimeoutLock)
+
+    LaunchedEffect(locked) {
+        // 锁状态变了就决定了小组件能否显示备忘正文，而 Glance 不会因为内存里的状态变化
+        // 自行重绘，必须主动刷新一次。放在这个 early return 之前，锁定与解锁两条路径都会触发。
+        WidgetUpdater.updateWidgets(context.applicationContext)
+    }
+
     if (!locked) {
         content()
         return

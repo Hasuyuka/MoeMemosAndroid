@@ -119,6 +119,7 @@
     <string name="pinned_only">仅显示置顶笔记</string>
     <string name="max_items">最大条目数</string>
     <string name="refresh">刷新</string>
+    <string name="widget_locked_message">已锁定，点按解锁</string>
     <string name="local_network_access">本地网络访问</string>
     <string name="local_network_access_denied">请在设置中允许访问附近的设备，然后重试连接本地网络上的 Memos 服务器。已保存的笔记仍可离线使用。</string>
     <string name="access_token">访问令牌</string>
