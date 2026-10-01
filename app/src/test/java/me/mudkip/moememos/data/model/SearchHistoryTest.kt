@@ -1,6 +1,7 @@
 package me.mudkip.moememos.data.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Test
 
@@ -44,11 +45,15 @@ class SearchHistoryTest {
 
     @Test
     fun `超出上限时丢弃最旧的`() {
-        val result = updateRecentSearches((1..MAX_RECENT_SEARCHES).map { "q$it" }, "new")
+        // q1 最新 … q8 最旧
+        val existing = (1..MAX_RECENT_SEARCHES).map { "q$it" }
+        val result = updateRecentSearches(existing, "new")
+
         assertEquals(MAX_RECENT_SEARCHES, result.size)
         assertEquals("new", result.first())
-        // 最旧的一条（q1）被挤掉，q2 成为最后一条
-        assertEquals("q2", result.last())
+        // 插入一条后整体后移一位，最旧的 q8 被挤出
+        assertEquals("q7", result.last())
+        assertFalse(result.contains("q8"))
     }
 
     @Test
