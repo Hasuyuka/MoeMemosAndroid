@@ -7,6 +7,10 @@ data class Settings(
     val usersList: List<UserData> = emptyList(),
     val currentUser: String = "",
     val appLockEnabled: Boolean = false,
+    /** 明暗模式：跟随系统 / 浅色 / 深色。全局外观偏好，不随账户变化。 */
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    /** 是否使用 Material You 动态取色。仅 Android 12（API 31）及以上生效。 */
+    val dynamicColor: Boolean = true,
     /**
      * 写入 settings_v3.json 时的结构版本。
      *
@@ -28,7 +32,14 @@ data class Settings(
         /**
          * 当前结构版本。
          *
-         * 改动本文件、[UserData] 或 [UserSettings] 的结构时：
+         * **只在需要变换既有数据时才 +1**（字段改名、拆分或合并字段、改变语义）。
+         *
+         * 仅仅新增一个**带默认值**的字段是向后兼容的：旧文件解码时该字段自然落到
+         * 默认值，不需要迁移，也不需要动这个版本号。为了「让机制看起来被用过」
+         * 而伪造一条空迁移只会增加噪音——本次新增 [themeMode] 与 [dynamicColor]
+         * 就属于这种情况，因此版本号保持 1。
+         *
+         * 确实需要 +1 时：
          *  1. 把这里 +1；
          *  2. 在 SettingsMigrations 里补一条对应迁移；
          *  3. 在 SettingsSerializerTest 里补一个用例。

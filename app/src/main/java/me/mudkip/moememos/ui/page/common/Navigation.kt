@@ -5,9 +5,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import me.mudkip.moememos.MainActivity
 import me.mudkip.moememos.data.model.ShareContent
 import me.mudkip.moememos.ext.navigateToMemoEditor
+import me.mudkip.moememos.ext.settingsDataStore
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.page.account.AccountPage
 import me.mudkip.moememos.ui.page.account.AddAccountPage
@@ -62,8 +65,18 @@ fun Navigation() {
     }
     var shareContent by remember { mutableStateOf<ShareContent?>(null) }
 
+    // 外观偏好是全局设置，直接观察 DataStore。读不到之前按默认值渲染
+    // （跟随系统 + 动态取色），与引入设置项之前的行为完全一致。
+    val settings by remember(context) {
+        context.applicationContext.settingsDataStore.data
+    }.collectAsState(initial = null)
+    val systemInDarkTheme = isSystemInDarkTheme()
+
     CompositionLocalProvider(LocalRootNavController provides navController) {
-        MoeMemosTheme {
+        MoeMemosTheme(
+            darkTheme = settings?.themeMode?.isDark(systemInDarkTheme) ?: systemInDarkTheme,
+            dynamicColor = settings?.dynamicColor ?: true,
+        ) {
             MemosNavHost(
                 navController = navController,
                 startDestination = RouteName.MEMOS,

@@ -1,6 +1,7 @@
 package me.mudkip.moememos.ui.page.settings
 
 import android.app.Activity
+import android.os.Build
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,9 +9,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Source
@@ -45,6 +48,7 @@ import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.MemoEditGesture
 import me.mudkip.moememos.data.model.Settings
+import me.mudkip.moememos.data.model.ThemeMode
 import me.mudkip.moememos.data.model.currentUserSettings
 import me.mudkip.moememos.data.model.displayTitle
 import me.mudkip.moememos.data.model.updateCurrentUserSettings
@@ -77,6 +81,8 @@ fun SettingsPage(
         AppLockAuthenticator.canAuthenticate(context)
     }
     var showEditGestureDialog by remember { mutableStateOf(false) }
+    var showThemeModeDialog by remember { mutableStateOf(false) }
+    val dynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     var showRemoveCertificateDialog by remember { mutableStateOf(false) }
     var hasClientCertificate by remember {
         mutableStateOf(
@@ -125,6 +131,25 @@ fun SettingsPage(
         scope.launch(Dispatchers.IO) {
             context.settingsDataStore.updateData { existingSettings ->
                 existingSettings.updateCurrentUserSettings { it.copy(autosave = enabled) }
+            }
+        }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        scope.launch(Dispatchers.IO) {
+            context.settingsDataStore.updateData { existingSettings ->
+                existingSettings.copy(themeMode = mode)
+            }
+        }
+    }
+
+    fun setDynamicColorEnabled(enabled: Boolean) {
+        if (enabled && !dynamicColorSupported) {
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            context.settingsDataStore.updateData { existingSettings ->
+                existingSettings.copy(dynamicColor = enabled)
             }
         }
     }
@@ -260,6 +285,47 @@ fun SettingsPage(
                     subtitle = R.string.autosave_summary.string,
                     checked = autosaveEnabled,
                     onCheckedChange = ::setAutosaveEnabled,
+                )
+            }
+
+            item {
+                Text(
+                    R.string.appearance.string,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp, 10.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+
+            item {
+                SettingItem(
+                    icon = Icons.Outlined.DarkMode,
+                    text = R.string.theme_mode.string,
+                    trailingIcon = {
+                        Text(
+                            text = settings.themeMode.titleResource.string,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                ) {
+                    showThemeModeDialog = true
+                }
+            }
+
+            item {
+                SettingSwitchItem(
+                    icon = Icons.Outlined.Palette,
+                    text = R.string.dynamic_color.string,
+                    subtitle = if (dynamicColorSupported) {
+                        R.string.dynamic_color_summary.string
+                    } else {
+                        R.string.dynamic_color_unavailable.string
+                    },
+                    checked = settings.dynamicColor,
+                    enabled = dynamicColorSupported,
+                    onCheckedChange = ::setDynamicColorEnabled,
                 )
             }
 
@@ -429,7 +495,50 @@ fun SettingsPage(
             }
         )
     }
+
+    if (showThemeModeDialog) {
+        AlertDialog(
+            onDismissRequest = { showThemeModeDialog = false },
+            title = { Text(R.string.theme_mode.string) },
+            text = {
+                LazyColumn {
+                    items(ThemeMode.entries.size) { index ->
+                        val mode = ThemeMode.entries[index]
+                        TextButton(
+                            onClick = {
+                                showThemeModeDialog = false
+                                setThemeMode(mode)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = mode.titleResource.string,
+                                color = if (mode == settings.themeMode) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showThemeModeDialog = false }) {
+                    Text(R.string.close.string)
+                }
+            }
+        )
+    }
 }
+
+private val ThemeMode.titleResource: Int
+    get() = when (this) {
+        ThemeMode.SYSTEM -> R.string.theme_mode_system
+        ThemeMode.LIGHT -> R.string.theme_mode_light
+        ThemeMode.DARK -> R.string.theme_mode_dark
+    }
 
 private val MemoEditGesture.titleResource: Int
     get() = when (this) {
