@@ -79,7 +79,9 @@ class SyncingRepository(
 
     override suspend fun listMemos(): ApiResponse<List<MemoEntity>> {
         return try {
-            val memos = memoDao.getAllMemos(accountKey).map { withResources(it) }
+            // 一次 JOIN 查询取回全部备忘及其资源（Room 把 @Relation 解析成一次
+            // `WHERE memoId IN (...)` 批量查询），替代此前「取全部备忘 + 逐条查资源表」的 N+1。
+            val memos = memoDao.getAllMemosWithResources(accountKey).map { it.toMemoEntity() }
             ApiResponse.Success(memos)
         } catch (e: Exception) {
             ApiResponse.Failure.Exception(e)
@@ -92,9 +94,9 @@ class SyncingRepository(
 
     override suspend fun listArchivedMemos(): ApiResponse<List<MemoEntity>> {
         return try {
-            val memos = memoDao.getArchivedMemos(accountKey)
-                .filterNot { it.isDeleted }
-                .map { withResources(it) }
+            val memos = memoDao.getArchivedMemosWithResources(accountKey)
+                .filterNot { it.memo.isDeleted }
+                .map { it.toMemoEntity() }
             ApiResponse.Success(memos)
         } catch (e: Exception) {
             ApiResponse.Failure.Exception(e)

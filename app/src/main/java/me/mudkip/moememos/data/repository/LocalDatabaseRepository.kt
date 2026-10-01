@@ -33,7 +33,8 @@ class LocalDatabaseRepository(
 
     override suspend fun listMemos(): ApiResponse<List<MemoEntity>> {
         return try {
-            val memos = memoDao.getAllMemos(accountKey).map { withResources(it) }
+            // 与 SyncingRepository 一致：走 JOIN 查询，避免逐条查资源表的 N+1。
+            val memos = memoDao.getAllMemosWithResources(accountKey).map { it.toMemoEntity() }
             ApiResponse.Success(memos)
         } catch (e: Exception) {
             ApiResponse.Failure.Exception(e)
@@ -46,7 +47,7 @@ class LocalDatabaseRepository(
 
     override suspend fun listArchivedMemos(): ApiResponse<List<MemoEntity>> {
         return try {
-            val memos = memoDao.getArchivedMemos(accountKey).map { withResources(it) }
+            val memos = memoDao.getArchivedMemosWithResources(accountKey).map { it.toMemoEntity() }
             ApiResponse.Success(memos)
         } catch (e: Exception) {
             ApiResponse.Failure.Exception(e)
