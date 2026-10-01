@@ -54,6 +54,48 @@ interface MemoDao {
     @Query("SELECT * FROM memos WHERE accountKey = :accountKey AND archived = 1 ORDER BY date DESC")
     suspend fun getArchivedMemosWithResources(accountKey: String): List<MemoWithResources>
 
+    /**
+     * 「列表面板」用的一次性查询：把筛选、排序与截断全部下推给 SQLite。
+     *
+     * 两个关键细节：
+     *
+     * 1. **标签匹配用 `instr` 而不是 `LIKE`。** SQLite 的 `LIKE` 对 ASCII 默认**不区分大小写**，
+     *    而列表页的 `contentHasTag` 用的是大小写敏感的 `contains`（该语义有单元测试钉着）。
+     *    `instr(content, X) > 0` 才是与 `contains` 等价且大小写敏感的形式。
+     * 2. `'#' || :tag` 对应 `contentHasTag` 里的 `"#$tag"`。它同时覆盖层级标签
+     *    （`#work/sub` 含 `#work`），所以不需要额外的 `"#$tag/"` 条件。
+     *
+     * 另外这里**不**用 @Relation 取 resources：调用方（桌面小组件）只渲染正文与时间，
+     * 省掉那次 JOIN 正是本查询存在的意义之一。
+     */
+    @Query("""
+        SELECT * FROM memos
+        WHERE accountKey = :accountKey AND archived = 0 AND isDeleted = 0
+          AND (:pinnedOnly = 0 OR pinned = 1)
+          AND (:tag IS NULL OR instr(content, '#' || :tag) > 0)
+        ORDER BY pinned DESC, date DESC
+        LIMIT :limit
+    """)
+    suspend fun getMemosFiltered(
+        accountKey: String,
+        tag: String?,
+        pinnedOnly: Boolean,
+        limit: Int
+    ): List<MemoEntity>
+
+    /**
+     * 随机取一条备忘，供「回忆」面板使用。
+     *
+     * 调用方此前的做法是取回**整张表**再 `shuffled().firstOrNull()`——
+     * 为了一条随机结果把上万条备忘全部读进内存。随机性交给 SQLite 即可。
+     */
+    @Query("""
+        SELECT * FROM memos
+        WHERE accountKey = :accountKey AND archived = 0 AND isDeleted = 0
+        ORDER BY RANDOM() LIMIT 1
+    """)
+    suspend fun getRandomMemo(accountKey: String): MemoEntity?
+
     @Query("SELECT * FROM memos WHERE accountKey = :accountKey")
     suspend fun getAllMemosForSync(accountKey: String): List<MemoEntity>
 

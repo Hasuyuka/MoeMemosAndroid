@@ -88,8 +88,10 @@ class MemoryGlanceWidget : GlanceAppWidget() {
         LaunchedEffect(Unit) {
             withContext(Dispatchers.IO) {
                 try {
-                    memoService.getRepository().listMemos().suspendOnSuccess {
-                        memo = data.shuffled().firstOrNull()
+                    // 随机一条交给 SQLite（ORDER BY RANDOM() LIMIT 1）：
+                    // 此前是取回**整张表**再 shuffled().firstOrNull()，为一条随机结果把全部备忘读进内存。
+                    memoService.getRepository().randomMemo().suspendOnSuccess {
+                        memo = data
                         error = null
                     }
                 } catch (e: Exception) {

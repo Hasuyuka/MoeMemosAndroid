@@ -62,7 +62,6 @@ import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.service.MemoService
 import me.mudkip.moememos.ext.settingsDataStore
 import me.mudkip.moememos.ui.security.AppLockSession
-import me.mudkip.moememos.util.contentHasTag
 import timber.log.Timber
 import java.time.Instant
 
@@ -126,23 +125,14 @@ class MoeMemosGlanceWidget : GlanceAppWidget() {
             withContext(Dispatchers.IO) {
                 try {
                     isLoading = true
-                    memoService.getRepository().listMemos().suspendOnSuccess {
-                        // Filter and sort memos
-                        val filteredMemos = data.filter { memo ->
-                            // 与列表页共用同一套标签口径（contentHasTag）：
-                            // 小组件的标签筛选此前也是 contains("#$filterTag")，
-                            // 会有同样的前缀误匹配问题。
-                            val matchesTag = filterTag == null || contentHasTag(memo.content, filterTag)
-                            val matchesPinned = !pinnedOnly || memo.pinned
-                            matchesTag && matchesPinned
-                        }
-                        
-                        val sortedMemos = filteredMemos.sortedWith(
-                            compareByDescending<MemoEntity> { it.pinned }
-                                .thenByDescending { it.date }
-                        ).take(maxItems)
-                        
-                        memos = sortedMemos
+                    // 筛选、排序与截断全部下推到 DAO（见 MemoDao.getMemosFiltered）：
+                    // 此前是取回全部备忘再在内存里过滤并排序，桌面上万条备忘时每次刷新都要走一遍；
+                    // 而且第 6 轮之后 listMemos 还会把每条备忘的资源一起 JOIN 出来。
+                    memoService.getRepository()
+                        .listMemosFiltered(filterTag, pinnedOnly, maxItems)
+                        .suspendOnSuccess {
+                            // DAO 返回的已经是筛好、排好、截断好的最终列表。
+                            memos = data
                         error = null
                     }
                 } catch (e: Exception) {
