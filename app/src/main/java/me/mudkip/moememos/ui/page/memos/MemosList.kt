@@ -57,6 +57,8 @@ fun MemosList(
     onRefresh: (suspend () -> Unit)? = null,
     onTagClick: ((String) -> Unit)? = null,
     onMemoClick: ((String) -> Unit)? = null,
+    /** 列表顶部的可选插槽（例如搜索页的最近搜索）。为 null 时行为与从前完全一致。 */
+    header: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val navController = LocalRootNavController.current
@@ -136,6 +138,10 @@ fun MemosList(
             state = lazyListState,
             contentPadding = listContentPadding
         ) {
+            if (header != null) {
+                item(key = "header") { header() }
+            }
+
             // 此前列表的错误只写进日志（见下方 LaunchedEffect），用户在界面上完全看不到：
             // 同步失败时列表就是旧数据或空的，没有任何解释。现在在列表顶部直接展示，
             // 下次加载成功后 MemosViewModel 会把 errorMessage 置空，它自然消失。

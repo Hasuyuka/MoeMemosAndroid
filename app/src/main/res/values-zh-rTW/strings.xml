@@ -102,6 +102,8 @@
     <string name="error_unknown">未知錯誤</string>
     <string name="no_memos">找不到 MEMO</string>
     <string name="no_search_results">找不到「%1$s」的結果</string>
+    <string name="recent_searches">最近搜尋</string>
+    <string name="clear_search_history">清空歷史</string>
     <string name="no_memos_with_tag">沒有這個標籤的 MEMO</string>
     <string name="no_images">沒有找到圖片</string>
     <string name="no_resources">沒有找到資源</string>
