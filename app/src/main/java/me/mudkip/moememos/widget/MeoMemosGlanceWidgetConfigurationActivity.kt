@@ -174,7 +174,7 @@ class MeoMemosGlanceWidgetConfigurationActivity : FragmentActivity() {
                             FilterChip(
                                 selected = selectedTag == null,
                                 onClick = { selectedTag = null },
-                                label = { Text("None") }
+                                label = { Text(stringResource(R.string.none)) }
                             )
                             tags.forEach { tag ->
                                 FilterChip(

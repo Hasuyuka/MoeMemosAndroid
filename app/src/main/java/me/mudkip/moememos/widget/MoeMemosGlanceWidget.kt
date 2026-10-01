@@ -142,7 +142,8 @@ class MoeMemosGlanceWidget : GlanceAppWidget() {
                         error = null
                     }
                 } catch (e: Exception) {
-                    error = e.message ?: "Unknown error"
+                    // 同 MemoryGlanceWidget：兜底文案走已翻译的资源。
+                    error = e.message ?: context.getString(R.string.error_unknown)
                     Timber.tag("MoeMemosWidget").e(e, "Exception in widget")
                 } finally {
                     isLoading = false
@@ -319,7 +320,9 @@ class MoeMemosGlanceWidget : GlanceAppWidget() {
                         Spacer(modifier = GlanceModifier.width(4.dp))
                         Image(
                             provider = ImageProvider(android.R.drawable.ic_lock_lock),
-                            contentDescription = "Private",
+                            // 锁图标表示「非公开」（PRIVATE 与 PROTECTED 都会出现），
+                            // 所以描述用「Not public」而不是原先写死的 "Private"。
+                            contentDescription = context.getString(R.string.visibility_not_public),
                             modifier = GlanceModifier.size(14.dp)
                         )
                     }
@@ -329,7 +332,7 @@ class MoeMemosGlanceWidget : GlanceAppWidget() {
                         Spacer(modifier = GlanceModifier.width(4.dp))
                         Image(
                             provider = ImageProvider(R.drawable.ic_pin),
-                            contentDescription = "Pinned",
+                            contentDescription = context.getString(R.string.pinned),
                             modifier = GlanceModifier.size(14.dp),
                             colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant)
                         )
