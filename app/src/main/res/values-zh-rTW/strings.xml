@@ -94,6 +94,9 @@
     <string name="loading">載入中…</string>
     <string name="error_unknown">未知錯誤</string>
     <string name="no_memos">找不到 MEMO</string>
+    <string name="no_images">沒有找到圖片</string>
+    <string name="no_resources">沒有找到資源</string>
+    <string name="failed_to_load_resources">資源載入失敗</string>
     <string name="memo_not_found">找不到 MEMO</string>
     <!-- App lock strings -->
     <string name="security">安全</string>
