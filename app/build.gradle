@@ -17,6 +17,9 @@ def hasReleaseSigning = [
     releaseSigningKeyPassword
 ].every { it != null && !it.trim().isEmpty() }
 
+// 逃生舱：只想到本地验证编译、接受未签名产物时用 -PallowUnsignedRelease。
+def allowUnsignedRelease = project.hasProperty("allowUnsignedRelease")
+
 android {
     compileSdk = 37
     // Provides llvm-strip for native libraries bundled by AndroidX.
@@ -78,6 +81,27 @@ android {
     }
 
     namespace = 'me.mudkip.moememos'
+}
+
+// 缺签名变量时，上面的 signingConfigs.release 块体不会执行、release buildType 也不会
+// 绑定签名，Gradle 会「成功」产出一个未签名的 release APK。这种静默降级很危险：
+// 产物看着像正式包，装到设备上却会被拒绝，而构建日志里没有任何失败信号。
+// 这里让显式的 release 打包任务直接失败，并说明缺了什么。
+// CI 侧（build-signed-release-apk.yml）另有 shell 层校验，本地此前完全没有保护。
+tasks.matching { it.name in ['assembleRelease', 'bundleRelease'] }.configureEach {
+    doFirst {
+        if (!hasReleaseSigning && !allowUnsignedRelease) {
+            throw new GradleException(
+                "缺少发布签名配置，拒绝产出未签名 release 包。\n" +
+                    "需要以下环境变量全部非空：\n" +
+                    "  ANDROID_SIGNING_STORE_FILE\n" +
+                    "  ANDROID_SIGNING_STORE_PASSWORD\n" +
+                    "  ANDROID_SIGNING_KEY_ALIAS\n" +
+                    "  ANDROID_SIGNING_KEY_PASSWORD\n" +
+                    "若只是想在本地验证编译、接受未签名产物，请加 -PallowUnsignedRelease。"
+            )
+        }
+    }
 }
 
 dependencies {
