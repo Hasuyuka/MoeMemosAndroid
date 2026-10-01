@@ -11,11 +11,15 @@ import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.compose.foundation.layout.size
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Attachment
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Source
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.DropdownMenu
@@ -52,6 +56,8 @@ import java.io.File
 fun Attachment(
     resource: ResourceRepresentable,
     onRemove: (() -> Unit)? = null,
+    /** 提供后菜单里多一项「打开所属备忘」；为 null 时（如编辑器中尚未保存的附件）不显示。 */
+    onOpenMemo: (() -> Unit)? = null,
     showMenu: Boolean = false
 ) {
     val context = LocalContext.current
@@ -202,6 +208,41 @@ fun Attachment(
                     )
                 }
             )
+            // 只在远端地址确实存在时提供「复制链接」：本地账户的 uri 是 file:// 或
+            // 尚未上传的本地路径，复制出去没有意义。
+            val remoteUrl = resource.uri
+                .takeIf { it.startsWith("http://") || it.startsWith("https://") }
+            if (remoteUrl != null) {
+                DropdownMenuItem(
+                    text = { Text(R.string.copy_link.string) },
+                    onClick = {
+                        context.getSystemService(ClipboardManager::class.java)
+                            ?.setPrimaryClip(ClipData.newPlainText(resource.filename, remoteUrl))
+                        menuExpanded = false
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Link,
+                            contentDescription = null
+                        )
+                    }
+                )
+            }
+            if (onOpenMemo != null) {
+                DropdownMenuItem(
+                    text = { Text(R.string.open_owning_memo.string) },
+                    onClick = {
+                        onOpenMemo()
+                        menuExpanded = false
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Source,
+                            contentDescription = null
+                        )
+                    }
+                )
+            }
             if (onRemove != null) {
                 DropdownMenuItem(
                     text = { Text(R.string.remove.string) },

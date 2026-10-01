@@ -1,5 +1,7 @@
 package me.mudkip.moememos.ui.page.resource
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,16 +36,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavHostController
 import me.mudkip.moememos.R
+import me.mudkip.moememos.data.local.entity.ResourceEntity
 import me.mudkip.moememos.ext.popBackStackIfLifecycleIsResumed
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.component.Attachment
 import me.mudkip.moememos.ui.component.MemoImage
+import me.mudkip.moememos.ui.media.MediaViewerActivity
+import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.viewmodel.ResourceListViewModel
 import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.lazy.staggeredgrid.items as staggeredGridItems
@@ -60,9 +66,16 @@ fun ResourceListPage(
     viewModel: ResourceListViewModel = hiltViewModel()
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
     var selectedFilter by rememberSaveable { mutableStateOf(ResourceFilter.IMAGE) }
     val imageResources = viewModel.resources.filter { it.mimeType?.startsWith("image/") == true }
     val otherResources = viewModel.resources.filterNot { it.mimeType?.startsWith("image/") == true }
+    val imageUrls = imageResources.map { it.localUri ?: it.uri }
+
+    fun openOwningMemo(resource: ResourceEntity) {
+        val memoId = resource.memoId ?: return
+        navController.navigate("${RouteName.MEMO_DETAIL}?memoId=${Uri.encode(memoId)}")
+    }
 
     Scaffold(
         topBar = {
@@ -155,7 +168,25 @@ fun ResourceListPage(
                                 resourceIdentifier = resource.identifier,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(8.dp)),
+                                onClick = {
+                                    // 走应用内查看器，与 MemoContent 里的行为一致：
+                                    // 不传 onClick 时 MemoImage 会退回系统 ACTION_VIEW 打开磁盘缓存文件，
+                                    // 资源页此前就是这样，点击图片会跳出应用、且看到的是缓存副本。
+                                    context.startActivity(
+                                        Intent(context, MediaViewerActivity::class.java).apply {
+                                            putExtra(
+                                                MediaViewerActivity.EXTRA_IMAGE_URLS,
+                                                imageUrls.toTypedArray()
+                                            )
+                                            putExtra(
+                                                MediaViewerActivity.EXTRA_INITIAL_INDEX,
+                                                imageResources.indexOf(resource).coerceAtLeast(0)
+                                            )
+                                            putExtra(MediaViewerActivity.EXTRA_CAPTION, resource.filename)
+                                        }
+                                    )
+                                }
                             )
                         }
                     }
@@ -170,7 +201,11 @@ fun ResourceListPage(
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
                         lazyItems(otherResources, key = { it.identifier }) { resource ->
-                            Attachment(resource = resource, showMenu = true)
+                            Attachment(
+                                resource = resource,
+                                onOpenMemo = { openOwningMemo(resource) },
+                                showMenu = true
+                            )
                         }
                     }
                 }
