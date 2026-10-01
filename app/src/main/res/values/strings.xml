@@ -143,6 +143,8 @@
     <string name="error_unknown">Unknown error</string>
     <string name="no_memos">No memos found</string>
     <string name="no_search_results">No results for “%1$s”</string>
+    <string name="recent_searches">Recent searches</string>
+    <string name="clear_search_history">Clear history</string>
     <string name="no_memos_with_tag">No memos with this tag</string>
     <string name="no_images">No images found</string>
     <string name="no_resources">No resources found</string>
