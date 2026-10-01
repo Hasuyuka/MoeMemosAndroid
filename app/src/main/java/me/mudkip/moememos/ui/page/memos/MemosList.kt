@@ -43,6 +43,7 @@ import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.util.edgeToEdgeContentPadding
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.util.contentHasTag
+import me.mudkip.moememos.util.matches
 import me.mudkip.moememos.util.parseMemoQuery
 import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
