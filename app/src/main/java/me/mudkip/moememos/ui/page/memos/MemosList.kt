@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -135,9 +136,30 @@ fun MemosList(
             state = lazyListState,
             contentPadding = listContentPadding
         ) {
+            // 此前列表的错误只写进日志（见下方 LaunchedEffect），用户在界面上完全看不到：
+            // 同步失败时列表就是旧数据或空的，没有任何解释。现在在列表顶部直接展示，
+            // 下次加载成功后 MemosViewModel 会把 errorMessage 置空，它自然消失。
+            viewModel.errorMessage?.let { message ->
+                item(key = "error") {
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                    )
+                }
+            }
+
             if (filteredMemos.isEmpty()) {
                 item(key = "empty") {
-                    Text(stringResource(R.string.no_memos), modifier = Modifier.padding(24.dp))
+                    // 空列表有三种完全不同的成因，此前一律显示「No memos found」：
+                    // 用户搜了三个字却看到「没有备忘」，会以为自己把备忘弄丢了。
+                    val message = when {
+                        !searchString.isNullOrEmpty() ->
+                            stringResource(R.string.no_search_results, searchString)
+                        tag != null -> stringResource(R.string.no_memos_with_tag)
+                        else -> stringResource(R.string.no_memos)
+                    }
+                    Text(message, modifier = Modifier.padding(24.dp))
                 }
             }
             items(filteredMemos, key = { it.identifier }) { memo ->
@@ -161,6 +183,7 @@ fun MemosList(
 
     LaunchedEffect(viewModel.errorMessage) {
         viewModel.errorMessage?.let {
+            // 保留日志用于排障；界面上的可见反馈见上方 LazyColumn 里的 error 项。
             Timber.d(it)
         }
     }
