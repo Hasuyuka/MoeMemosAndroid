@@ -25,11 +25,6 @@ permissions:
 jobs:
   build-and-test:
     name: build + unit tests
-    # 删除分支同样会产生一次 push 事件，但那个 ref 已经不存在、没有任何内容需要编译。
-    # 不拦掉的话，每次清理已合并分支都会白跑一遍完整构建。
-    # （实测：删除 perf/explore-batch-creators 时观察到同一个 commit 上跑了两遍。）
-    # workflow_dispatch 事件没有 deleted 字段，取反后为 true，因此手动触发不受影响。
-    if: ${{ !github.event.deleted }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
