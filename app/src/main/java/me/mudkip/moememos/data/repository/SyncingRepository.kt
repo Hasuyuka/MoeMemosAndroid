@@ -26,11 +26,13 @@ import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.local.entity.MemoWithResources
 import me.mudkip.moememos.data.local.entity.ResourceEntity
 import me.mudkip.moememos.data.model.Account
+import me.mudkip.moememos.data.model.ImageQuality
 import me.mudkip.moememos.data.model.Memo
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.model.Resource
 import me.mudkip.moememos.data.model.SyncStatus
 import me.mudkip.moememos.data.model.User
+import me.mudkip.moememos.data.model.compressibleImageFormat
 import me.mudkip.moememos.ext.getErrorMessage
 import me.mudkip.moememos.util.extractCustomTags
 import okhttp3.MediaType
@@ -45,6 +47,8 @@ class SyncingRepository(
     private val remoteRepository: RemoteRepository,
     private val account: Account,
     deferredPushDelayMillis: Long = 2000,
+    /** 上传图片品质的来源。默认不压缩，与引入该设置之前的行为一致。 */
+    private val imageQualityProvider: suspend () -> ImageQuality = { ImageQuality.ORIGINAL },
     private val onUserSynced: suspend (User) -> Unit = {},
 ) : AbstractMemoRepository() {
     private data class UploadedResourcesResult(
@@ -319,10 +323,27 @@ class SyncingRepository(
         memoIdentifier: String?
     ): ApiResponse<ResourceEntity> {
         return try {
-            val uri = fileStorage.saveFile(
+            val storedName = UUID.randomUUID().toString() + "_" + filename
+            // 「上传图片品质」：只处理 JPEG / PNG，GIF 会被 compressibleImageFormat 挡掉。
+            // 压缩失败（读不出、尺寸非法）时返回 null，这里回退到原样保存——
+            // 宁可传得大一点，也不能因为压缩失败而丢图。
+            val format = compressibleImageFormat(type?.toString())
+            val quality = if (format != null) imageQualityProvider() else ImageQuality.ORIGINAL
+            val compressed = if (format != null && quality.enabled) {
+                fileStorage.saveCompressedImage(
+                    accountKey = accountKey,
+                    sourceUri = contentUri,
+                    filename = storedName,
+                    format = format,
+                    quality = quality,
+                )
+            } else {
+                null
+            }
+            val uri = compressed ?: fileStorage.saveFile(
                 accountKey = accountKey,
                 sourceUri = contentUri,
-                filename = UUID.randomUUID().toString() + "_" + filename
+                filename = storedName
             )
             val resource = ResourceEntity(
                 identifier = UUID.randomUUID().toString(),

@@ -15,6 +15,8 @@ data class Settings(
     val fontScale: FontScale = FontScale.DEFAULT,
     /** 灵感页布局。默认大卡片，与引入该设置之前的行为一致。 */
     val exploreLayout: ExploreLayout = ExploreLayout.LARGE,
+    /** 上传图片品质。默认原图，与引入该设置之前的行为一致。 */
+    val imageQuality: ImageQuality = ImageQuality.ORIGINAL,
     /**
      * 写入 settings_v3.json 时的结构版本。
      *

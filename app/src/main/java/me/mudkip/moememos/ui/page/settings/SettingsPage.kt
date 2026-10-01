@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FormatSize
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
@@ -49,6 +50,7 @@ import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.MemoEditGesture
 import me.mudkip.moememos.data.model.FontScale
+import me.mudkip.moememos.data.model.ImageQuality
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.data.model.ThemeMode
 import me.mudkip.moememos.data.model.currentUserSettings
@@ -85,6 +87,7 @@ fun SettingsPage(
     var showEditGestureDialog by remember { mutableStateOf(false) }
     var showThemeModeDialog by remember { mutableStateOf(false) }
     var showFontScaleDialog by remember { mutableStateOf(false) }
+    var showImageQualityDialog by remember { mutableStateOf(false) }
     val dynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     var showRemoveCertificateDialog by remember { mutableStateOf(false) }
     var hasClientCertificate by remember {
@@ -161,6 +164,14 @@ fun SettingsPage(
         scope.launch(Dispatchers.IO) {
             context.settingsDataStore.updateData { existingSettings ->
                 existingSettings.copy(fontScale = scale)
+            }
+        }
+    }
+
+    fun setImageQuality(quality: ImageQuality) {
+        scope.launch(Dispatchers.IO) {
+            context.settingsDataStore.updateData { existingSettings ->
+                existingSettings.copy(imageQuality = quality)
             }
         }
     }
@@ -352,6 +363,22 @@ fun SettingsPage(
                     }
                 ) {
                     showFontScaleDialog = true
+                }
+            }
+
+            item {
+                SettingItem(
+                    icon = Icons.Outlined.PhotoLibrary,
+                    text = R.string.image_quality.string,
+                    subtitle = R.string.image_quality_summary.string,
+                    trailingIcon = {
+                        Text(
+                            text = settings.imageQuality.titleResource.string,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                ) {
+                    showImageQualityDialog = true
                 }
             }
 
@@ -593,6 +620,42 @@ fun SettingsPage(
             }
         )
     }
+
+    if (showImageQualityDialog) {
+        AlertDialog(
+            onDismissRequest = { showImageQualityDialog = false },
+            title = { Text(R.string.image_quality.string) },
+            text = {
+                LazyColumn {
+                    items(ImageQuality.entries.size) { index ->
+                        val quality = ImageQuality.entries[index]
+                        TextButton(
+                            onClick = {
+                                showImageQualityDialog = false
+                                setImageQuality(quality)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = quality.titleResource.string,
+                                color = if (quality == settings.imageQuality) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showImageQualityDialog = false }) {
+                    Text(R.string.close.string)
+                }
+            }
+        )
+    }
 }
 
 private val ThemeMode.titleResource: Int
@@ -608,6 +671,14 @@ private val FontScale.titleResource: Int
         FontScale.DEFAULT -> R.string.font_scale_default
         FontScale.LARGE -> R.string.font_scale_large
         FontScale.EXTRA_LARGE -> R.string.font_scale_extra_large
+    }
+
+private val ImageQuality.titleResource: Int
+    get() = when (this) {
+        ImageQuality.ORIGINAL -> R.string.image_quality_original
+        ImageQuality.HIGH -> R.string.image_quality_high
+        ImageQuality.MEDIUM -> R.string.image_quality_medium
+        ImageQuality.LOW -> R.string.image_quality_low
     }
 
 private val MemoEditGesture.titleResource: Int
