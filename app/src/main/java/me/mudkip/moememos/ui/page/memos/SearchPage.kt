@@ -55,6 +55,7 @@ import me.mudkip.moememos.data.model.updateCurrentUserSettings
 import me.mudkip.moememos.data.model.updateRecentSearches
 import me.mudkip.moememos.ext.popBackStackIfLifecycleIsResumed
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.util.parseMemoQuery
 import me.mudkip.moememos.ui.component.ActionIconButton
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.viewmodel.LocalMemos
@@ -92,20 +93,25 @@ fun SearchPage(navController: NavHostController) {
         }
     }
 
+    // 输入 is:archived 时自动把归档纳入范围：否则用户明确要求「只看归档」，
+    // 却因为范围开关没打开而得到空结果——那是很难自查的失败方式。
+    val parsedQuery = remember(query) { parseMemoQuery(query) }
+    val effectiveIncludeArchived = includeArchived || parsedQuery.archivedOnly
+
     // 归档备忘按需加载：底层是本地 DAO 查询，但用户没要求时也没必要做。
-    LaunchedEffect(includeArchived) {
-        if (includeArchived) {
+    LaunchedEffect(effectiveIncludeArchived) {
+        if (effectiveIncludeArchived) {
             viewModel.loadArchivedMemos()
         }
     }
 
     // 为 null 表示沿用 MemosList 自己的数据源（默认只搜当前列表）。
     val scopeMemos: List<MemoEntity>? = remember(
-        includeArchived,
+        effectiveIncludeArchived,
         viewModel.memos.toList(),
         viewModel.archivedMemos.toList(),
     ) {
-        if (includeArchived) viewModel.memos + viewModel.archivedMemos else null
+        if (effectiveIncludeArchived) viewModel.memos + viewModel.archivedMemos else null
     }
 
     val header: @Composable () -> Unit = {
@@ -115,6 +121,16 @@ fun SearchPage(navController: NavHostController) {
                 onIncludeArchivedChange = { includeArchived = it },
             )
             // 只在「还没开始输入」时展示历史：一旦有了查询词，用户关心的是结果而不是历史。
+            if (query.isBlank()) {
+                // 搜索语法没人知道就等于没做，所以在空查询时给一行示例。
+                // 其中的 tag: / is: / after: 是字面语法，不翻译。
+                Text(
+                    text = stringResource(R.string.search_syntax_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
             if (query.isBlank() && recentSearches.isNotEmpty()) {
                 RecentSearchesRow(
                     searches = recentSearches,
