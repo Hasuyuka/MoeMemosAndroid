@@ -126,6 +126,8 @@ fun MoeMemosTheme(
         darkTheme: Boolean = isSystemInDarkTheme(),
         // Dynamic color is available on Android 12+
         dynamicColor: Boolean = true,
+        /** 相对系统字号的倍数，见 [me.mudkip.moememos.data.model.FontScale]。1f 表示不缩放。 */
+        fontScale: Float = 1f,
         content: @Composable () -> Unit
 ) {
     val colorScheme = when {
