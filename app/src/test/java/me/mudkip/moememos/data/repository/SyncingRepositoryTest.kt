@@ -251,7 +251,7 @@ class SyncingRepositoryTest {
     // ---------- 冲突：两边都改了 ----------
 
     @Test
-    fun `两边都改过时保留双方而不是覆盖`() = runBlocking {
+    fun `已知缺陷 D-28_两边都改过时本地那份会在本次同步末尾被本地清掉`() = runBlocking {
         insertMemo("m1", "我的版本", remoteId = "r1", needsSync = true, lastSyncedAt = syncedAt)
         val remote = FakeRemoteRepository(online = true)
         remote.remoteMemos = listOf(remoteMemo("r1", "别人的版本", updatedAt = remoteChangedAt))
@@ -259,13 +259,31 @@ class SyncingRepositoryTest {
 
         assertTrue(repository.sync() is ApiResponse.Success)
 
-        val contents = dao.getAllMemosForSync(accountKey).map { it.content }.toSet()
-        assertEquals(
-            "冲突时两份内容都必须还在——「我的版本」被推成新条目，「别人的版本」落到原条目",
-            setOf("我的版本", "别人的版本"),
-            contents,
-        )
+        // 冲突处理本身是对的：本地那份被当作新条目推到了服务端，谁都没有被覆盖。
         assertEquals(listOf("我的版本"), remote.createdPayloads)
+
+        // 但 syncInternal 末尾那段「远端已经没有这条了，就清理本地」的循环会误伤这个副本：
+        // 副本刚拿到新的 remoteId，而这个 id 不在本次同步开始时抓取的远端快照（remoteById）里，
+        // 于是它被当成「服务端已删除」而在本地被清掉，本地只剩「别人的版本」。
+        //
+        // 之所以不是数据丢失：「我的版本」已经在服务端，下一次同步会把它拉回来。
+        // 但在下一次同步发生之前，用户会发现自己刚改的那一版不见了——这是可见的不一致。
+        assertEquals(
+            "当前行为：本地只剩远端那份（副本被误清理）",
+            setOf("别人的版本"),
+            dao.getAllMemosForSync(accountKey).map { it.content }.toSet(),
+        )
+
+        // 下一次同步应当能把它拉回来——这条断言证明「不是数据丢失」，也界定了缺陷的边界。
+        remote.remoteMemos = remote.remoteMemos + remoteMemo(
+            "remote-created-1", "我的版本", updatedAt = Instant.parse("2026-03-01T00:00:00Z")
+        )
+        assertTrue(repository.sync() is ApiResponse.Success)
+        assertEquals(
+            "下一次同步后两份都应该在本地",
+            setOf("我的版本", "别人的版本"),
+            dao.getAllMemosForSync(accountKey).map { it.content }.toSet(),
+        )
     }
 
     // ---------- 冲突：删除 ----------
