@@ -66,7 +66,10 @@ android {
         unitTests {
             // Robolectric 需要 AGP 提供合并后的 manifest 与资源，才能在没有设备的 JVM 测试里
             // 把 Android 框架跑起来——DAO 行为测试依赖这一点。
-            isIncludeAndroidResources = true
+            //
+            // 注意：这里的构建脚本是 Groovy DSL，属性名是 includeAndroidResources；
+            // Kotlin DSL（build.gradle.kts）里才写作 isIncludeAndroidResources。
+            includeAndroidResources = true
         }
     }
 
