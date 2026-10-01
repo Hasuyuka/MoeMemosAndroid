@@ -220,7 +220,173 @@ class SyncingRepositoryTest {
         assertTrue(remote.createdPayloads.isEmpty())
     }
 
+    // ---------- 冲突：只有一边改了 ----------
+
+    @Test
+    fun `只有本地改过时以本地为准并推送`() = runBlocking {
+        insertMemo("m1", "本地改过的", remoteId = "r1", needsSync = true, lastSyncedAt = syncedAt)
+        val remote = FakeRemoteRepository(online = true)
+        remote.remoteMemos = listOf(remoteMemo("r1", "原始内容", updatedAt = syncedAt))
+        val repository = repository(remote)
+
+        assertTrue(repository.sync() is ApiResponse.Success)
+
+        assertEquals("本地版本应当被推送到服务端", listOf("r1" to "本地改过的"), remote.updatedPayloads)
+        assertEquals("本地内容不该被远端覆盖", "本地改过的", stored("m1")!!.content)
+    }
+
+    @Test
+    fun `只有远端改过时以远端为准`() = runBlocking {
+        insertMemo("m1", "旧内容", remoteId = "r1", needsSync = false, lastSyncedAt = syncedAt)
+        val remote = FakeRemoteRepository(online = true)
+        remote.remoteMemos = listOf(remoteMemo("r1", "服务端新内容", updatedAt = remoteChangedAt))
+        val repository = repository(remote)
+
+        assertTrue(repository.sync() is ApiResponse.Success)
+
+        assertEquals("服务端新内容", stored("m1")!!.content)
+        assertTrue("没有本地改动就不该推送更新", remote.updatedPayloads.isEmpty())
+    }
+
+    // ---------- 冲突：两边都改了 ----------
+
+    @Test
+    fun `已知缺陷 D-28_两边都改过时本地那份会在本次同步末尾被本地清掉`() = runBlocking {
+        insertMemo("m1", "我的版本", remoteId = "r1", needsSync = true, lastSyncedAt = syncedAt)
+        val remote = FakeRemoteRepository(online = true)
+        remote.remoteMemos = listOf(remoteMemo("r1", "别人的版本", updatedAt = remoteChangedAt))
+        val repository = repository(remote)
+
+        assertTrue(repository.sync() is ApiResponse.Success)
+
+        // 冲突处理本身是对的：本地那份被当作新条目推到了服务端，谁都没有被覆盖。
+        assertEquals(listOf("我的版本"), remote.createdPayloads)
+
+        // 但 syncInternal 末尾那段「远端已经没有这条了，就清理本地」的循环会误伤这个副本：
+        // 副本刚拿到新的 remoteId，而这个 id 不在本次同步开始时抓取的远端快照（remoteById）里，
+        // 于是它被当成「服务端已删除」而在本地被清掉，本地只剩「别人的版本」。
+        //
+        // 之所以不是数据丢失：「我的版本」已经在服务端，下一次同步会把它拉回来。
+        // 但在下一次同步发生之前，用户会发现自己刚改的那一版不见了——这是可见的不一致。
+        assertEquals(
+            "当前行为：本地只剩远端那份（副本被误清理）",
+            setOf("别人的版本"),
+            dao.getAllMemosForSync(accountKey).map { it.content }.toSet(),
+        )
+
+        // 下一次同步应当能把它拉回来——这条断言证明「不是数据丢失」，也界定了缺陷的边界。
+        remote.remoteMemos = remote.remoteMemos + remoteMemo(
+            "remote-created-1", "我的版本", updatedAt = Instant.parse("2026-03-01T00:00:00Z")
+        )
+        assertTrue(repository.sync() is ApiResponse.Success)
+        assertEquals(
+            "下一次同步后两份都应该在本地",
+            setOf("我的版本", "别人的版本"),
+            dao.getAllMemosForSync(accountKey).map { it.content }.toSet(),
+        )
+    }
+
+    // ---------- 冲突：删除 ----------
+
+    @Test
+    fun `远端删掉了本地未改的条目时本地也会清理`() = runBlocking {
+        insertMemo("m1", "服务端已经没有这条了", remoteId = "r1", needsSync = false, lastSyncedAt = syncedAt)
+        val remote = FakeRemoteRepository(online = true)
+        remote.remoteMemos = emptyList()
+        val repository = repository(remote)
+
+        assertTrue(repository.sync() is ApiResponse.Success)
+
+        assertEquals("远端已删除且本地未改，本地行应当被清理", null, stored("m1"))
+        assertEquals(0, dao.getAllMemosForSync(accountKey).size)
+    }
+
+    @Test
+    fun `本地删除会推到服务端并清掉本地行`() = runBlocking {
+        insertMemo(
+            "m1", "要删的", remoteId = "r1",
+            needsSync = true, isDeleted = true, lastSyncedAt = syncedAt,
+        )
+        val remote = FakeRemoteRepository(online = true)
+        remote.remoteMemos = listOf(remoteMemo("r1", "要删的", updatedAt = syncedAt))
+        val repository = repository(remote)
+
+        assertTrue(repository.sync() is ApiResponse.Success)
+
+        assertEquals("本地删除必须到达服务端", listOf("r1"), remote.deletedRemoteIds)
+        assertEquals("推送成功后墓碑也该清掉", null, stored("m1"))
+    }
+
+    // ---------- 部分失败 ----------
+
+    @Test
+    fun `一条推送失败不影响另一条且失败的那条不丢`() = runBlocking {
+        insertMemo("m1", "第一条改过", remoteId = "r1", needsSync = true, lastSyncedAt = syncedAt)
+        insertMemo("m2", "第二条改过", remoteId = "r2", needsSync = true, lastSyncedAt = syncedAt)
+        val remote = FakeRemoteRepository(online = true)
+        remote.remoteMemos = listOf(
+            remoteMemo("r1", "第一条原始", updatedAt = syncedAt),
+            remoteMemo("r2", "第二条原始", updatedAt = syncedAt),
+        )
+        remote.failUpdateFor += "r1"
+        val repository = repository(remote)
+
+        val result = repository.sync()
+
+        assertTrue("有失败时整体应当报失败，不能假装成功", result is ApiResponse.Failure)
+        assertEquals("成功的那条照常推送", listOf("r2" to "第二条改过"), remote.updatedPayloads)
+        assertTrue("失败的条目必须仍是待同步，否则这次修改就永远丢了", stored("m1")!!.needsSync)
+        assertEquals("第一条改过", stored("m1")!!.content)
+    }
+
     // ---------- 辅助 ----------
+
+    private val syncedAt = Instant.parse("2026-01-01T00:00:00Z")
+    private val remoteChangedAt = Instant.parse("2026-02-01T00:00:00Z")
+
+    private fun remoteMemo(
+        remoteId: String,
+        content: String,
+        updatedAt: Instant,
+        archived: Boolean = false,
+    ) = Memo(
+        remoteId = remoteId,
+        content = content,
+        date = updatedAt,
+        pinned = false,
+        visibility = MemoVisibility.PRIVATE,
+        resources = emptyList(),
+        tags = emptyList(),
+        archived = archived,
+        updatedAt = updatedAt,
+    )
+
+    private suspend fun insertMemo(
+        identifier: String,
+        content: String,
+        remoteId: String? = "remote-$identifier",
+        needsSync: Boolean = false,
+        isDeleted: Boolean = false,
+        lastSyncedAt: Instant? = null,
+        archived: Boolean = false,
+    ) {
+        dao.insertMemo(
+            MemoEntity(
+                identifier = identifier,
+                remoteId = remoteId,
+                accountKey = accountKey,
+                content = content,
+                date = Instant.parse("2026-01-01T00:00:00Z"),
+                visibility = MemoVisibility.PRIVATE,
+                pinned = false,
+                archived = archived,
+                needsSync = needsSync,
+                isDeleted = isDeleted,
+                lastModified = Instant.parse("2026-01-01T00:00:00Z"),
+                lastSyncedAt = lastSyncedAt,
+            )
+        )
+    }
 
     /** 直接写一条「已经同步过」的备忘，省去先跑一次完整同步。 */
     private suspend fun insertSyncedMemo(identifier: String, content: String) {
@@ -250,14 +416,26 @@ private class FakeRemoteRepository(var online: Boolean) : RemoteRepository() {
 
     val createdPayloads = mutableListOf<String>()
 
+    /** 远端当前「存在」的备忘，由测试按场景设置。 */
+    var remoteMemos: List<Memo> = emptyList()
+
+    /** 记录推送上来的更新：(remoteId, content)。 */
+    val updatedPayloads = mutableListOf<Pair<String, String>>()
+
+    /** 记录推送上来的删除。 */
+    val deletedRemoteIds = mutableListOf<String>()
+
+    /** 让指定 remoteId 的更新失败，用来构造「部分失败」。 */
+    val failUpdateFor = mutableSetOf<String>()
+
     private fun <T> offline(): ApiResponse<T> =
         ApiResponse.Failure.Exception(IllegalStateException("offline"))
 
     override suspend fun listMemos(): ApiResponse<List<Memo>> =
-        if (online) ApiResponse.Success(emptyList()) else offline()
+        if (online) ApiResponse.Success(remoteMemos.filterNot { it.archived }) else offline()
 
     override suspend fun listArchivedMemos(): ApiResponse<List<Memo>> =
-        if (online) ApiResponse.Success(emptyList()) else offline()
+        if (online) ApiResponse.Success(remoteMemos.filter { it.archived }) else offline()
 
     override suspend fun listWorkspaceMemos(
         pageSize: Int,
@@ -297,10 +475,30 @@ private class FakeRemoteRepository(var online: Boolean) : RemoteRepository() {
         tags: List<String>?,
         pinned: Boolean?,
         archived: Boolean?
-    ): ApiResponse<Memo> = offline()
+    ): ApiResponse<Memo> {
+        if (!online || remoteId in failUpdateFor) {
+            return offline()
+        }
+        updatedPayloads += remoteId to (content ?: "")
+        val current = remoteMemos.first { it.remoteId == remoteId }
+        return ApiResponse.Success(
+            current.copy(
+                content = content ?: current.content,
+                pinned = pinned ?: current.pinned,
+                visibility = visibility ?: current.visibility,
+                archived = archived ?: current.archived,
+                updatedAt = Instant.parse("2026-03-01T00:00:00Z"),
+            )
+        )
+    }
 
-    override suspend fun deleteMemo(remoteId: String): ApiResponse<Unit> =
-        if (online) ApiResponse.Success(Unit) else offline()
+    override suspend fun deleteMemo(remoteId: String): ApiResponse<Unit> {
+        if (!online) {
+            return offline()
+        }
+        deletedRemoteIds += remoteId
+        return ApiResponse.Success(Unit)
+    }
 
     override suspend fun listResources(): ApiResponse<List<Resource>> =
         if (online) ApiResponse.Success(emptyList()) else offline()
