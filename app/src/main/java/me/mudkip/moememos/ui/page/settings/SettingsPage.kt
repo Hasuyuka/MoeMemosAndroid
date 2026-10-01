@@ -45,7 +45,9 @@ import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.MemoEditGesture
 import me.mudkip.moememos.data.model.Settings
+import me.mudkip.moememos.data.model.currentUserSettings
 import me.mudkip.moememos.data.model.displayTitle
+import me.mudkip.moememos.data.model.updateCurrentUserSettings
 import me.mudkip.moememos.data.mtls.MtlsManager
 import me.mudkip.moememos.ext.popBackStackIfLifecycleIsResumed
 import me.mudkip.moememos.ext.settingsDataStore
@@ -115,32 +117,14 @@ fun SettingsPage(
         }
     }
 
-    val currentEditGesture = settings.usersList
-        .firstOrNull { it.accountKey == settings.currentUser }
-        ?.settings
-        ?.editGesture
-        ?: MemoEditGesture.NONE
-    val autosaveEnabled = settings.usersList
-        .firstOrNull { it.accountKey == settings.currentUser }
-        ?.settings
-        ?.autosave
-        ?: false
+    val userSettings = settings.currentUserSettings()
+    val currentEditGesture = userSettings.editGesture
+    val autosaveEnabled = userSettings.autosave
 
     fun setAutosaveEnabled(enabled: Boolean) {
         scope.launch(Dispatchers.IO) {
             context.settingsDataStore.updateData { existingSettings ->
-                val userIndex = existingSettings.usersList.indexOfFirst { user ->
-                    user.accountKey == existingSettings.currentUser
-                }
-                if (userIndex == -1) {
-                    return@updateData existingSettings
-                }
-                val users = existingSettings.usersList.toMutableList()
-                val user = users[userIndex]
-                users[userIndex] = user.copy(
-                    settings = user.settings.copy(autosave = enabled)
-                )
-                existingSettings.copy(usersList = users)
+                existingSettings.updateCurrentUserSettings { it.copy(autosave = enabled) }
             }
         }
     }
@@ -416,19 +400,9 @@ fun SettingsPage(
                                 showEditGestureDialog = false
                                 scope.launch(Dispatchers.IO) {
                                     context.settingsDataStore.updateData { existingSettings ->
-                                        val userIndex =
-                                            existingSettings.usersList.indexOfFirst { user ->
-                                                user.accountKey == existingSettings.currentUser
-                                            }
-                                        if (userIndex == -1) {
-                                            return@updateData existingSettings
+                                        existingSettings.updateCurrentUserSettings {
+                                            it.copy(editGesture = gesture)
                                         }
-                                        val users = existingSettings.usersList.toMutableList()
-                                        val user = users[userIndex]
-                                        users[userIndex] = user.copy(
-                                            settings = user.settings.copy(editGesture = gesture)
-                                        )
-                                        existingSettings.copy(usersList = users)
                                     }
                                     WidgetUpdater.updateWidgets(context)
                                 }
