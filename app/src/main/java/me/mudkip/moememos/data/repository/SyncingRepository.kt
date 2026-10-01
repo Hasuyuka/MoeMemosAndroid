@@ -493,6 +493,9 @@ class SyncingRepository(
         val localByRemoteId = localMemos.mapNotNull { memo ->
             memo.remoteId?.let { it to memo }
         }.toMap()
+        // 本次同步**开始前**就已经关联了远端 id 的集合。末尾的清理循环要靠它来区分
+        // 「服务端真的删掉了」与「这个远端 id 是本次同步过程中才拿到的」——见 D-28。
+        val remoteIdsAtStart = localByRemoteId.keys
 
         for (remoteMemo in remoteMemos) {
             val remoteId = remoteMemoId(remoteMemo)
@@ -564,9 +567,15 @@ class SyncingRepository(
                     if (!pushLocalMemo(local.identifier, forceCreate = true)) {
                         recordFailure()
                     }
-                } else {
+                } else if (local.remoteId in remoteIdsAtStart) {
+                    // 这条在本次同步开始前就关联了远端 id，而现在远端列表里没有它
+                    // —— 是服务端删掉了它，本地跟着清理。
                     permanentlyDeleteMemo(local.identifier)
                 }
+                // 否则什么也不做：这个远端 id 是**本次同步过程中**才拿到的
+                // （典型来源是 duplicateConflict 推上去的冲突副本）。
+                // remoteById 是本轮开始时的快照，当然不含它，但这不代表服务端删了它。
+                // 误删它会让用户在冲突后发现自己刚改的那一版不见了（D-28）。
                 continue
             }
 
