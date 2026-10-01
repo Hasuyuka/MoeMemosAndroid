@@ -1,6 +1,7 @@
 package me.mudkip.moememos.ui.component
 
 import android.text.format.DateUtils
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -16,6 +18,7 @@ import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -43,25 +46,42 @@ import me.mudkip.moememos.viewmodel.LocalMemos
 
 @Composable
 fun ArchivedMemoCard(
-    memo: MemoEntity
+    memo: MemoEntity,
+    /** 多选模式：整张卡片可点击勾选，右上角的操作菜单让位给复选框。 */
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null,
 ) {
+    val toggle = if (selectionMode) onToggleSelection else null
     Card(
         modifier = Modifier
             .padding(horizontal = 15.dp, vertical = 10.dp)
             .fillMaxWidth()
+            .then(if (toggle != null) Modifier.clickable { toggle() } else Modifier)
     ) {
         Column {
             Row(
                 modifier = Modifier.padding(start = 15.dp).fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (selectionMode) {
+                    Checkbox(
+                        checked = selected,
+                        onCheckedChange = { toggle?.invoke() },
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
                 Text(
                     DateUtils.getRelativeTimeSpanString(memo.date.toEpochMilli(), System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS).toString(),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.outline
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                ArchivedMemosCardActionButton(memo)
+                if (selectionMode) {
+                    Spacer(modifier = Modifier.width(15.dp))
+                } else {
+                    ArchivedMemosCardActionButton(memo)
+                }
             }
 
             MemoContent(memo, previewMode = false)
