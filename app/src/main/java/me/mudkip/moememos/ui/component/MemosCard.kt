@@ -5,17 +5,21 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.text.format.DateUtils
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Archive
@@ -47,8 +51,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.skydoves.sandwich.suspendOnSuccess
 import kotlinx.coroutines.launch
@@ -60,6 +68,7 @@ import me.mudkip.moememos.ext.icon
 import me.mudkip.moememos.ext.navigateToMemoEditor
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ext.titleResource
+import me.mudkip.moememos.ui.media.MediaViewerActivity
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
@@ -75,6 +84,11 @@ fun MemosCard(
     showResources: Boolean = true,
     /** 网格/多列布局：收紧卡片内外边距。大卡片那种 15dp 在两列并排时会变成一道大沟。 */
     dense: Boolean = false,
+    /**
+     * 网格模式下卡片的固定高度，由调用方按缩略图尺寸算好传入。
+     * 传 null 表示高度随内容走（大卡片模式）。固定高度 + 正文截断 = 视觉上整齐。
+     */
+    gridCardHeight: Dp? = null,
     /** 多选模式：整张卡片可点按勾选，右上角的操作菜单让位给复选框。 */
     selectionMode: Boolean = false,
     selected: Boolean = false,
@@ -94,9 +108,8 @@ fun MemosCard(
             vertical = if (dense) 4.dp else 10.dp
         )
         .fillMaxWidth()
-        // 多列模式下撑满所在行的高度：行高由该行最高的卡片决定，不这样做的话
-        // 同一行会参差不齐（短卡片下面留一大片空白）。
-        .then(if (dense) Modifier.fillMaxHeight() else Modifier)
+        // 网格模式：高度固定，与内容多少无关，网格才是视觉整齐的。
+        .then(if (gridCardHeight != null) Modifier.height(gridCardHeight) else Modifier)
         .then(
             if (toggleSelection != null) {
                 Modifier.clickable { toggleSelection() }
@@ -187,10 +200,16 @@ fun MemosCard(
                 }
             }
 
-            MemoContent(
-                memo,
-                previewMode = previewMode,
-                showResources = showResources,
+            if (gridCardHeight != null) {
+                // 网格模式：固定高度，所以正文必须截断、缩略图数量必须封顶，
+                // 否则内容会溢出卡片。这里显示两行文字 + 最多 3 列 × 2 行缩略图，
+                // 剩下的点开备忘录看全。
+                CompactGridBody(memo = memo)
+            } else {
+                MemoContent(
+                    memo,
+                    previewMode = previewMode,
+                    showResources = showResources,
                 checkboxChange = { checked, startOffset, endOffset ->
                     scope.launch {
                         var text = memo.content.substring(startOffset, endOffset)
@@ -211,7 +230,92 @@ fun MemosCard(
                     onClick(memo)
                 },
                 onTagClick = onTagClick
-            )
+                )
+            }
+        }
+    }
+}
+
+/** 网格卡片里的缩略图格子：3 列 × 最多 2 行。数量封顶是固定高度的前提。 */
+internal const val GRID_THUMB_COLUMNS = 3
+internal const val GRID_THUMB_ROWS = 2
+
+/**
+ * 网格模式下的卡片正文：**两行文字 + 3 列 × 2 行缩略图**。
+ *
+ * 卡片高度是固定的（由调用方按缩略图尺寸算出），所以这里的内容必须自己封顶：
+ * 文字最多两行、超出省略；缩略图最多 [GRID_THUMB_COLUMNS]×[GRID_THUMB_ROWS] 张，
+ * 还有多的就在最后一张角上标 "+N"。点开备忘录能看全部。
+ *
+ * 排序按上传先后（见 MemoResourceContent 里的同一套规则），这样卡片里的
+ * 第一张就是用户最先选的那张。
+ */
+@Composable
+private fun CompactGridBody(memo: MemoEntity) {
+    val context = LocalContext.current
+    val preview = remember(memo.content) { extractPreviewContent(memo.content).first }
+    val images = remember(memo.resources) {
+        memo.resources
+            .filter { it.mimeType?.startsWith("image/") == true }
+            .sortedWith(UPLOAD_ORDER)
+    }
+    val shown = images.take(GRID_THUMB_COLUMNS * GRID_THUMB_ROWS)
+    val hiddenCount = images.size - shown.size
+
+    Column(modifier = Modifier.padding(horizontal = 8.dp)) {
+        Text(
+            text = preview,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+        shown.chunked(GRID_THUMB_COLUMNS).forEachIndexed { rowIndex, row ->
+            Row(modifier = Modifier.padding(bottom = 2.dp)) {
+                row.forEachIndexed { indexInRow, resource ->
+                    val globalIndex = rowIndex * GRID_THUMB_COLUMNS + indexInRow
+                    Box(modifier = Modifier.weight(1f).padding(1.dp)) {
+                        MemoImage(
+                            url = resource.localUri ?: resource.uri,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(3.dp)),
+                            resourceIdentifier = resource.identifier,
+                            onClick = {
+                                context.startActivity(
+                                    Intent(context, MediaViewerActivity::class.java).apply {
+                                        val urls = images.map { it.localUri ?: it.uri }.toTypedArray()
+                                        putExtra(MediaViewerActivity.EXTRA_IMAGE_URLS, urls)
+                                        putExtra(
+                                            MediaViewerActivity.EXTRA_INITIAL_INDEX,
+                                            globalIndex
+                                        )
+                                    }
+                                )
+                            }
+                        )
+                        if (hiddenCount > 0 && globalIndex == shown.lastIndex) {
+                            Text(
+                                text = "+$hiddenCount",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .background(
+                                        Color.Black.copy(alpha = 0.55f),
+                                        RoundedCornerShape(3.dp)
+                                    )
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+                // 这一行没满就补空格，否则最后几格会被拉宽
+                repeat(GRID_THUMB_COLUMNS - row.size) {
+                    Spacer(modifier = Modifier.weight(1f).padding(1.dp))
+                }
+            }
         }
     }
 }
