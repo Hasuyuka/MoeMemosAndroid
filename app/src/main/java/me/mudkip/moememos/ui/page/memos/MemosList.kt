@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.model.Account
+import me.mudkip.moememos.data.model.ExploreLayout
 import me.mudkip.moememos.data.model.MemoEditGesture
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.ext.settingsDataStore
