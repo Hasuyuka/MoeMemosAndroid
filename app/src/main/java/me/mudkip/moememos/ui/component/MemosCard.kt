@@ -232,6 +232,7 @@ fun MemosCard(
                 onTagClick = onTagClick
                 )
             }
+        }
     }
 }
 
