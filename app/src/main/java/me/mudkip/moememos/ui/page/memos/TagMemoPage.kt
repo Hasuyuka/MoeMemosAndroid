@@ -40,6 +40,7 @@ import me.mudkip.moememos.ui.component.rememberRunOnSelection
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.ui.util.MemoSelectionState
+import me.mudkip.moememos.util.MemoSortDirection
 import me.mudkip.moememos.util.MemoSortMode
 import me.mudkip.moememos.util.contentHasTag
 import me.mudkip.moememos.viewmodel.LocalMemos
@@ -74,6 +75,8 @@ private fun TagMemoPageContent(
     var showSortDialog by remember { mutableStateOf(false) }
     val sortMode = settings.usersList.firstOrNull { it.accountKey == settings.currentUser }
         ?.settings?.memoSortMode ?: MemoSortMode.CREATED
+    val sortDirection = settings.usersList.firstOrNull { it.accountKey == settings.currentUser }
+        ?.settings?.memoSortDirection ?: MemoSortDirection.DESCENDING
     var showDeleteDialog by remember { mutableStateOf(false) }
     val visibleIds = remember(memosViewModel.memos, tag) {
         memosViewModel.memos.filter { contentHasTag(it.content, tag) }.map { it.identifier }
@@ -168,11 +171,18 @@ private fun TagMemoPageContent(
     if (showSortDialog) {
         MemoSortDialog(
             current = sortMode,
-            onSelect = { mode ->
-                showSortDialog = false
+            currentDirection = sortDirection,
+            onSelectMode = { mode ->
                 scope.launch(Dispatchers.IO) {
                     context.settingsDataStore.updateData { existing ->
                         existing.updateCurrentUserSettings { it.copy(memoSortMode = mode) }
+                    }
+                }
+            },
+            onSelectDirection = { direction ->
+                scope.launch(Dispatchers.IO) {
+                    context.settingsDataStore.updateData { existing ->
+                        existing.updateCurrentUserSettings { it.copy(memoSortDirection = direction) }
                     }
                 }
             },

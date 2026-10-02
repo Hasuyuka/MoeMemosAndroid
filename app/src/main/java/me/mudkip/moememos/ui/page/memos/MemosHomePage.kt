@@ -44,6 +44,7 @@ import me.mudkip.moememos.ui.component.rememberRunOnSelection
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.ui.util.MemoSelectionState
+import me.mudkip.moememos.util.MemoSortDirection
 import me.mudkip.moememos.util.MemoSortMode
 import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
@@ -87,6 +88,8 @@ private fun MemosHomePageContent(
     var showSortDialog by remember { mutableStateOf(false) }
     val sortMode = settings.usersList.firstOrNull { it.accountKey == settings.currentUser }
         ?.settings?.memoSortMode ?: MemoSortMode.CREATED
+    val sortDirection = settings.usersList.firstOrNull { it.accountKey == settings.currentUser }
+        ?.settings?.memoSortDirection ?: MemoSortDirection.DESCENDING
 
     // 批量操作（多选）：入口放在顶栏的显式按钮上，不用长按——卡片的 LONG 手势
     // 已经被「进入编辑」占用（且用户可配置），两者会冲突。
@@ -203,11 +206,18 @@ private fun MemosHomePageContent(
     if (showSortDialog) {
         MemoSortDialog(
             current = sortMode,
-            onSelect = { mode ->
-                showSortDialog = false
+            currentDirection = sortDirection,
+            onSelectMode = { mode ->
                 scope.launch(Dispatchers.IO) {
                     context.settingsDataStore.updateData { existing ->
                         existing.updateCurrentUserSettings { it.copy(memoSortMode = mode) }
+                    }
+                }
+            },
+            onSelectDirection = { direction ->
+                scope.launch(Dispatchers.IO) {
+                    context.settingsDataStore.updateData { existing ->
+                        existing.updateCurrentUserSettings { it.copy(memoSortDirection = direction) }
                     }
                 }
             },

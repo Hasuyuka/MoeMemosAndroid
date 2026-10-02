@@ -1,6 +1,7 @@
 package me.mudkip.moememos.data.model
 
 import kotlinx.serialization.Serializable
+import me.mudkip.moememos.util.MemoSortDirection
 import me.mudkip.moememos.util.MemoSortMode
 
 @Serializable
@@ -31,6 +32,7 @@ data class UserSettings(
     val editGesture: MemoEditGesture = MemoEditGesture.NONE,
     /** 列表排序方式。默认按创建时间，与引入该设置之前的行为一致。 */
     val memoSortMode: MemoSortMode = MemoSortMode.CREATED,
+    val memoSortDirection: MemoSortDirection = MemoSortDirection.DESCENDING,
     val autosave: Boolean = false,
     /**
      * 最近搜索词，最新一次在最前。

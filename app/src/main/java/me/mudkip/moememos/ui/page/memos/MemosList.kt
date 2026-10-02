@@ -52,6 +52,7 @@ import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.util.edgeToEdgeContentPadding
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.ui.util.MemoSelectionState
+import me.mudkip.moememos.util.MemoSortDirection
 import me.mudkip.moememos.util.MemoSortMode
 import me.mudkip.moememos.util.contentHasTag
 import me.mudkip.moememos.util.matches
@@ -102,6 +103,11 @@ fun MemosList(
         ?.settings
         ?.memoSortMode
         ?: MemoSortMode.CREATED
+    val currentSortDirection = settings.usersList
+        .firstOrNull { it.accountKey == settings.currentUser }
+        ?.settings
+        ?.memoSortDirection
+        ?: MemoSortDirection.DESCENDING
     val refreshState = rememberPullToRefreshState()
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
@@ -137,8 +143,8 @@ fun MemosList(
     }
     // 排序在过滤之后做：置顶优先由 sortMemos 统一保证（过滤阶段那个 pinned + nonPinned
     // 只是让过滤少做一点无谓的比较，最终顺序仍以这里为准）。
-    val sortedMemos = remember(filteredMemos, currentSortMode) {
-        sortMemos(filteredMemos, currentSortMode)
+    val sortedMemos = remember(filteredMemos, currentSortMode, currentSortDirection) {
+        sortMemos(filteredMemos, currentSortMode, currentSortDirection)
     }
     var listTopId: String? by rememberSaveable {
         mutableStateOf(null)

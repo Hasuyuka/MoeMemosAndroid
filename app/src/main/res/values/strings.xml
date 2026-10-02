@@ -19,6 +19,8 @@
     <string name="sort_updated">Recently edited</string>
     <string name="sort_created">Date created</string>
     <string name="sort_title">Title</string>
+    <string name="sort_ascending">Ascending</string>
+    <string name="sort_descending">Descending</string>
     <string name="reorder_images">Reorder images</string>
     <string name="move_up">Move up</string>
     <string name="move_down">Move down</string>
