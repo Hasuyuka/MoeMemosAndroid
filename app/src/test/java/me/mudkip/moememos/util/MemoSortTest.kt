@@ -5,7 +5,7 @@ import me.mudkip.moememos.data.model.MemoVisibility
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.Instant
-import java.util.Collator
+import java.text.Collator
 import java.util.Locale
 
 class MemoSortTest {
