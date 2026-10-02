@@ -3,23 +3,43 @@ package me.mudkip.moememos.ui.page.memos
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import me.mudkip.moememos.ui.component.ActionIconButton
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
+import me.mudkip.moememos.data.model.Settings
+import me.mudkip.moememos.ext.settingsDataStore
 import me.mudkip.moememos.ext.string
+import me.mudkip.moememos.ui.component.DeleteSelectedDialog
+import me.mudkip.moememos.ui.component.SelectionStartButton
+import me.mudkip.moememos.ui.component.SelectionTopBar
+import me.mudkip.moememos.ui.component.rememberRunOnSelection
+import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.page.common.RouteName
+import me.mudkip.moememos.ui.util.MemoSelectionState
+import me.mudkip.moememos.util.contentHasTag
+import me.mudkip.moememos.viewmodel.LocalMemos
 
 @Composable
 fun TagMemoPage(
@@ -42,27 +62,71 @@ private fun TagMemoPageContent(
 ) {
     val scope = rememberCoroutineScope()
     val normalizedCurrentTag = remember(tag) { normalizeTag(tag) }
+    val context = LocalContext.current
+    val memosViewModel = LocalMemos.current
+    val settings by context.settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())
+    val selection = remember { MemoSelectionState() }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val visibleIds = remember(memosViewModel.memos, tag) {
+        memosViewModel.memos.filter { it.contentHasTag(tag) }.map { it.identifier }
+    }
+    val selectedCount = selection.visibleCountIn(visibleIds)
+    val runOnSelection = rememberRunOnSelection(
+        scope = scope,
+        selection = selection,
+        visibleIds = visibleIds,
+        onItem = { memosViewModel.deleteMemo(it) },
+        onFinished = { memosViewModel.refreshLocalSnapshot() },
+    )
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(tag) },
-                navigationIcon = {
-                    if (drawerState != null) {
-                        ActionIconButton(label = R.string.menu.string, onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Filled.Menu, contentDescription = R.string.menu.string)
+            if (selection.isSelecting) {
+                SelectionTopBar(
+                    selection = selection,
+                    visibleIds = visibleIds,
+                    selectedCount = selectedCount,
+                    onDeleteRequest = { showDeleteDialog = true },
+                )
+            } else {
+                TopAppBar(
+                    title = { Text(tag) },
+                    navigationIcon = {
+                        if (drawerState != null) {
+                            ActionIconButton(label = R.string.menu.string, onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(Icons.Filled.Menu, contentDescription = R.string.menu.string)
+                            }
                         }
-                    }
-                },
-            )
+                    },
+                    actions = {
+                        // 和「灵感」页保持一致：搜索、布局、多选三个入口。
+                        ActionIconButton(label = R.string.search.string, onClick = {
+                            navController.navigate(RouteName.SEARCH)
+                        }) {
+                            Icon(Icons.Filled.Search, contentDescription = R.string.search.string)
+                        }
+                        ActionIconButton(label = R.string.change_layout.string, onClick = {
+                            scope.launch(Dispatchers.IO) {
+                                context.settingsDataStore.updateData { existing ->
+                                    existing.copy(exploreLayout = existing.exploreLayout.next())
+                                }
+                            }
+                        }) {
+                            Icon(Icons.Outlined.GridView, contentDescription = R.string.change_layout.string)
+                        }
+                        SelectionStartButton(selection = selection, visibleCount = visibleIds.size)
+                    },
+                )
+            }
         },
 
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = {
-                    // 把当前标签带进编辑器。标签就是正文里的 #xxx，所以用户留着它、
-                    // 改掉它、或者全删掉，新备忘都会落到实际对应的标签页（或总列表）。
-                    navController.navigate(
+                    // INPUT 路由注册在**根**导航图上，而这里是标签页自己的子图控制器；
+                    // 用子图控制器跳一个不存在的目的地会直接抛 IllegalArgumentException（闪退）。
+                    // 备忘详情页的跳转同理，所以这个页面一直用的是 rootNavController。
+                    LocalRootNavController.current.navigate(
                         "${RouteName.INPUT}?tag=${java.net.URLEncoder.encode(tag, "UTF-8")}"
                     )
                 },
@@ -78,6 +142,8 @@ private fun TagMemoPageContent(
                 tag = tag,
                 // 别让最后一条被悬浮按钮盖住
                 additionalBottomPadding = TagPageFabAvoidancePadding,
+                layout = settings.exploreLayout,
+                selection = selection,
                 onTagClick = { clickedTag ->
                     if (normalizeTag(clickedTag) == normalizedCurrentTag) {
                         return@MemosList
@@ -90,6 +156,17 @@ private fun TagMemoPageContent(
             )
         }
     )
+
+    if (showDeleteDialog) {
+        DeleteSelectedDialog(
+            count = selectedCount,
+            onDismiss = { showDeleteDialog = false },
+            onConfirm = {
+                showDeleteDialog = false
+                runOnSelection()
+            },
+        )
+    }
 }
 
 private fun normalizeTag(tag: String): String {

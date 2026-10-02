@@ -47,6 +47,7 @@ import me.mudkip.moememos.ui.component.MemosCard
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.util.edgeToEdgeContentPadding
 import me.mudkip.moememos.ui.page.common.RouteName
+import me.mudkip.moememos.ui.util.MemoSelectionState
 import me.mudkip.moememos.util.contentHasTag
 import me.mudkip.moememos.util.matches
 import me.mudkip.moememos.util.parseMemoQuery
@@ -75,6 +76,8 @@ fun MemosList(
      * 不传就是大卡片，所以标签页、归档页、搜索页不受影响。
      */
     layout: ExploreLayout = ExploreLayout.LARGE,
+    /** 多选。为 null 时列表完全不做多选处理（默认行为）。 */
+    selection: MemoSelectionState? = null,
 ) {
     val context = LocalContext.current
     val navController = LocalRootNavController.current
@@ -207,6 +210,9 @@ fun MemosList(
                     editGesture = editGesture ?: MemoEditGesture.NONE,
                     previewMode = true,
                     showSyncStatus = currentAccount !is Account.Local,
+                    selectionMode = selection?.isSelecting == true,
+                    selected = selection?.selected?.contains(memo.identifier) == true,
+                    onToggleSelection = { selection?.toggle(memo.identifier) },
                     onTagClick = onTagClick
                 )
             }
@@ -262,6 +268,11 @@ fun MemosList(
                         previewMode = true,
                         showSyncStatus = currentAccount !is Account.Local,
                         showResources = showImages,
+                        // 多列时收紧卡片间距：大卡片那种 15dp 并排起来会变成一道大沟。
+                        dense = true,
+                        selectionMode = selection?.isSelecting == true,
+                        selected = selection?.selected?.contains(memo.identifier) == true,
+                        onToggleSelection = { selection?.toggle(memo.identifier) },
                         onTagClick = onTagClick
                     )
                 }
