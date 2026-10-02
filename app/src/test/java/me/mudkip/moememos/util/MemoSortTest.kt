@@ -93,8 +93,73 @@ class MemoSortTest {
 
     @Test
     fun `空列表与单项`() {
-        assertEquals(emptyList<MemoEntity>(), sortMemos(emptyList(), MemoSortMode.CREATED, collator))
+        assertEquals(
+            emptyList<MemoEntity>(),
+            sortMemos(emptyList(), MemoSortMode.CREATED, MemoSortDirection.DESCENDING, collator),
+        )
         val one = listOf(memo("only"))
-        assertEquals(one.map { it.identifier }, sortMemos(one, MemoSortMode.TITLE, collator).map { it.identifier })
+        assertEquals(
+            one.map { it.identifier },
+            sortMemos(one, MemoSortMode.TITLE, MemoSortDirection.ASCENDING, collator).map { it.identifier },
+        )
+    }
+
+    // ---- 升降序 ----
+
+    @Test
+    fun `按创建时间升序是最旧的在前`() {
+        val list = listOf(
+            memo("new", created = base.plusSeconds(60)),
+            memo("old", created = base),
+        )
+        assertEquals(
+            listOf("old", "new"),
+            sortMemos(list, MemoSortMode.CREATED, MemoSortDirection.ASCENDING, collator).map { it.identifier },
+        )
+    }
+
+    @Test
+    fun `升降序互为反序`() {
+        // 方向开关失效时最容易表现为「看着没反应」，这里把它钉住。
+        val list = (1..5).map { memo("m$it", content = "note $it", created = base.plusSeconds(it.toLong() * 10)) }
+        val asc = sortMemos(list, MemoSortMode.CREATED, MemoSortDirection.ASCENDING, collator).map { it.identifier }
+        val desc = sortMemos(list, MemoSortMode.CREATED, MemoSortDirection.DESCENDING, collator).map { it.identifier }
+        assertEquals(asc.reversed(), desc)
+    }
+
+    @Test
+    fun `字母排序升序是 A 到 Z`() {
+        val list = listOf(
+            memo("c", content = "cherry"),
+            memo("a", content = "apple"),
+            memo("b", content = "banana"),
+        )
+        assertEquals(
+            listOf("a", "b", "c"),
+            sortMemos(list, MemoSortMode.TITLE, MemoSortDirection.ASCENDING, collator).map { it.identifier },
+        )
+    }
+
+    @Test
+    fun `升序下置顶仍然在最前`() {
+        // 置顶优先与升降序无关：方向切换不该把置顶的备忘甩到中间。
+        val list = listOf(
+            memo("normal", created = base),
+            memo("pinned", content = "zzz", created = base.plusSeconds(100), pinned = true),
+        )
+        assertEquals(
+            listOf("pinned", "normal"),
+            sortMemos(list, MemoSortMode.CREATED, MemoSortDirection.ASCENDING, collator).map { it.identifier },
+        )
+    }
+
+    @Test
+    fun `两个方向下结果都可复现`() {
+        val list = listOf(memo("b"), memo("a"))
+        MemoSortDirection.entries.forEach { direction ->
+            val once = sortMemos(list, MemoSortMode.UPDATED, direction, collator).map { it.identifier }
+            val twice = sortMemos(list, MemoSortMode.UPDATED, direction, collator).map { it.identifier }
+            assertEquals(once, twice)
+        }
     }
 }

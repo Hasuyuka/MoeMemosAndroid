@@ -19,6 +19,8 @@
     <string name="sort_updated">按修改时间</string>
     <string name="sort_created">按创建时间</string>
     <string name="sort_title">按字母</string>
+    <string name="sort_ascending">升序</string>
+    <string name="sort_descending">降序</string>
     <string name="reorder_images">调整图片顺序</string>
     <string name="move_up">上移</string>
     <string name="move_down">下移</string>

@@ -5,42 +5,59 @@ import java.text.Collator
 
 /** 备忘列表的排序方式。 */
 enum class MemoSortMode {
-    /** 按最后修改时间，最近改过的在前。 */
+    /** 按最后修改时间。 */
     UPDATED,
 
-    /** 按创建时间，最新建的在前（此前的行为，也是默认）。 */
+    /** 按创建时间（此前的行为，也是默认）。 */
     CREATED,
 
-    /** 按正文文字排序。 */
+    /** 按正文文字。 */
     TITLE,
 }
 
 /**
- * 按 [mode] 排序。
+ * 排序方向。
+ *
+ * 升/降序是**独立于排序方式**的第二个维度：「按创建时间」升序是最旧的在前，
+ * 「按字母」升序则是 A-Z / 拼音正序。
+ */
+enum class MemoSortDirection {
+    ASCENDING,
+    DESCENDING,
+}
+
+/**
+ * 按 [mode] + [direction] 排序。
  *
  * 置顶的备忘永远排在最前——这个行为此前由 SQL 的 `ORDER BY pinned DESC` 提供。
  * 改成内存排序后必须自己保留，否则用户置顶的备忘会沉到列表中间。
  *
  * 字母排序用 [Collator] 而不是 `String.compareTo`：中文按 Unicode 码点排出来是按
  * 笔画的，几乎没人期待那个顺序。Collator 按当前语言环境处理（中文环境按拼音、
- * 英文环境按字母）。它是可注入的，测试里传固定实例就不受环境影响。
+ * 英文环境按字母）。它是可注入的，测试里传固定实例就不受运行环境影响。
  *
- * 三种方式都以创建时间作为兜底键：两个备忘的排序键相同时，顺序仍然是确定的
- * （否则每次刷新可能换一个顺序）。
+ * 排序键相同时用另一个时间字段兜底，保证结果是**确定的**——否则同一屏数据
+ * 每次刷新可能换一个顺序，用户会觉得列表在乱跳。
  */
 fun sortMemos(
     memos: List<MemoEntity>,
     mode: MemoSortMode,
+    direction: MemoSortDirection = MemoSortDirection.DESCENDING,
     collator: Collator = Collator.getInstance(),
 ): List<MemoEntity> {
-    val comparator = when (mode) {
-        MemoSortMode.UPDATED -> compareByDescending<MemoEntity> { it.lastModified }
-        MemoSortMode.CREATED -> compareByDescending<MemoEntity> { it.date }
+    val byMode = when (mode) {
+        MemoSortMode.UPDATED -> compareBy<MemoEntity> { it.lastModified }
+        MemoSortMode.CREATED -> compareBy<MemoEntity> { it.date }
         MemoSortMode.TITLE -> compareBy(collator) { it.content }
+    }
+    val directed = if (direction == MemoSortDirection.DESCENDING) byMode.reversed() else byMode
+    val tieBreak = when (direction) {
+        MemoSortDirection.DESCENDING -> compareByDescending<MemoEntity> { it.date }
+        MemoSortDirection.ASCENDING -> compareBy<MemoEntity> { it.date }
     }
     return memos.sortedWith(
         compareByDescending<MemoEntity> { it.pinned }
-            .then(comparator)
-            .thenByDescending { it.date }
+            .then(directed)
+            .then(tieBreak)
     )
 }
