@@ -45,7 +45,9 @@ fun sortMemos(
     direction: MemoSortDirection = MemoSortDirection.DESCENDING,
     collator: Collator = Collator.getInstance(),
 ): List<MemoEntity> {
-    val byMode = when (mode) {
+    // 显式标注类型：否则 compareBy(collator) 的两个重载会推错，
+    // 把 Collator 当成 Comparator<MemoEntity> 传给另一个重载。
+    val byMode: Comparator<MemoEntity> = when (mode) {
         MemoSortMode.UPDATED -> compareBy<MemoEntity> { it.lastModified }
         MemoSortMode.CREATED -> compareBy<MemoEntity> { it.date }
         MemoSortMode.TITLE -> compareBy(collator) { it.content }
