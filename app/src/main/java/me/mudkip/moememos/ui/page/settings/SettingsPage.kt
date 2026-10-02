@@ -49,6 +49,7 @@ import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.MemoEditGesture
+import me.mudkip.moememos.data.model.selectableEditGestures
 import me.mudkip.moememos.data.model.FontScale
 import me.mudkip.moememos.data.model.ImageQuality
 import me.mudkip.moememos.data.model.Settings
@@ -512,8 +513,8 @@ fun SettingsPage(
             title = { Text(R.string.edit_gesture.string) },
             text = {
                 LazyColumn {
-                    items(MemoEditGesture.entries.size) { index ->
-                        val gesture = MemoEditGesture.entries[index]
+                    items(selectableEditGestures.size) { index ->
+                val gesture = selectableEditGestures[index]
                         TextButton(
                             onClick = {
                                 showEditGestureDialog = false

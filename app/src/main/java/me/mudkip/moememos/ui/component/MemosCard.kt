@@ -122,10 +122,12 @@ fun MemosCard(
                             onClick(memo)
                         }
                     },
-                    onLongClick = if (editGesture == MemoEditGesture.LONG) {
-                        {
-                            rootNavController.navigateToMemoEditor(memo.identifier)
-                        }
+                    // 长按固定为「进入批量编辑并选中这一条」。
+                    // 「长按进入编辑」这个手势已从设置里去掉，让位给批量操作；
+                    // 顶栏也不再有多选入口，两边不冲突。
+                    // 进入多选由调用方在回调里做（它才持有 MemoSelectionState）。
+                    onLongClick = if (onToggleSelection != null) {
+                        { onToggleSelection.invoke() }
                     } else {
                         null
                     },

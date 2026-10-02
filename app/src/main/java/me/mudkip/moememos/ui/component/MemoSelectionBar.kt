@@ -2,7 +2,6 @@ package me.mudkip.moememos.ui.component
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.AlertDialog
@@ -53,19 +52,6 @@ fun rememberRunOnSelection(
                 onFinished()
                 selection.exit()
             }
-        }
-    }
-}
-
-/** 非多选状态下顶栏上的「进入多选」入口。列表为空时不给入口，免得进去只能看到 0 项。 */
-@Composable
-fun SelectionStartButton(
-    selection: MemoSelectionState,
-    visibleCount: Int,
-) {
-    if (visibleCount > 0) {
-        IconButton(onClick = { selection.start() }) {
-            Icon(Icons.Outlined.Checklist, contentDescription = R.string.select.string)
         }
     }
 }
