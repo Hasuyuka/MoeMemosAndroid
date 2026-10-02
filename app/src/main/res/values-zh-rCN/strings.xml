@@ -15,6 +15,9 @@
     <string name="select">多选</string>
     <string name="select_all">全选</string>
     <string name="change_layout">切换布局</string>
+    <string name="reorder_images">调整图片顺序</string>
+    <string name="move_up">上移</string>
+    <string name="move_down">下移</string>
     <string name="image_quality">上传图片品质</string>
     <string name="image_quality_summary">上传前压缩 JPEG / PNG 附件；GIF 等格式不做处理。</string>
     <string name="image_quality_original">原图</string>
