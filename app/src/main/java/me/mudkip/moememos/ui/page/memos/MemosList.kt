@@ -52,9 +52,11 @@ import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.util.edgeToEdgeContentPadding
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.ui.util.MemoSelectionState
+import me.mudkip.moememos.util.MemoSortMode
 import me.mudkip.moememos.util.contentHasTag
 import me.mudkip.moememos.util.matches
 import me.mudkip.moememos.util.parseMemoQuery
+import me.mudkip.moememos.util.sortMemos
 import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
 import me.mudkip.moememos.viewmodel.ManualSyncResult
@@ -95,6 +97,11 @@ fun MemosList(
         .firstOrNull { it.accountKey == settings.currentUser }
         ?.settings
         ?.editGesture
+    val currentSortMode = settings.usersList
+        .firstOrNull { it.accountKey == settings.currentUser }
+        ?.settings
+        ?.memoSortMode
+        ?: MemoSortMode.CREATED
     val refreshState = rememberPullToRefreshState()
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
@@ -127,6 +134,11 @@ fun MemosList(
         }
 
         fullList
+    }
+    // 排序在过滤之后做：置顶优先由 sortMemos 统一保证（过滤阶段那个 pinned + nonPinned
+    // 只是让过滤少做一点无谓的比较，最终顺序仍以这里为准）。
+    val sortedMemos = remember(filteredMemos, currentSortMode) {
+        sortMemos(filteredMemos, currentSortMode)
     }
     var listTopId: String? by rememberSaveable {
         mutableStateOf(null)
@@ -188,7 +200,7 @@ fun MemosList(
                 }
             }
 
-            if (filteredMemos.isEmpty()) {
+            if (sortedMemos.isEmpty()) {
                 item(key = "empty") {
                     // 空列表有三种完全不同的成因，此前一律显示「No memos found」：
                     // 用户搜了三个字却看到「没有备忘」，会以为自己把备忘弄丢了。
@@ -201,7 +213,7 @@ fun MemosList(
                     Text(message, modifier = Modifier.padding(24.dp))
                 }
             }
-            items(filteredMemos, key = { it.identifier }) { memo ->
+            items(sortedMemos, key = { it.identifier }) { memo ->
                 MemosCard(
                     memo = memo,
                     onClick = { selectedMemo ->
@@ -216,7 +228,11 @@ fun MemosList(
                     showSyncStatus = currentAccount !is Account.Local,
                     selectionMode = selection?.isSelecting == true,
                     selected = selection?.selected?.contains(memo.identifier) == true,
-                    onToggleSelection = { selection?.toggle(memo.identifier) },
+                    onToggleSelection = {
+                            // 长按：先进入多选，再选中这一条
+                            selection?.start()
+                            selection?.toggle(memo.identifier)
+                        },
                     onTagClick = onTagClick
                 )
             }
@@ -246,7 +262,7 @@ fun MemosList(
                         )
                     }
                 }
-                if (filteredMemos.isEmpty()) {
+                if (sortedMemos.isEmpty()) {
                     item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
                         val message = when {
                             !searchString.isNullOrEmpty() ->
@@ -257,8 +273,8 @@ fun MemosList(
                         Text(message, modifier = Modifier.padding(24.dp))
                     }
                 }
-                items(count = filteredMemos.size, key = { filteredMemos[it].identifier }) { index ->
-                    val memo = filteredMemos[index]
+                items(count = sortedMemos.size, key = { sortedMemos[it].identifier }) { index ->
+                    val memo = sortedMemos[index]
                     // 卡片高度固定 = 头部 + 两行文字 + 两行缩略图，与内容多少无关，
                     // 网格因此在视觉上是整齐的。缩略图是正方形，边长由格子宽度决定，
                     // 所以高度要按实际宽度算（BoxWithConstraints）。
@@ -280,7 +296,11 @@ fun MemosList(
                         gridCardHeight = GridCardHeaderHeight + GridCardTextHeight + thumb * GRID_THUMB_ROWS,
                         selectionMode = selection?.isSelecting == true,
                         selected = selection?.selected?.contains(memo.identifier) == true,
-                        onToggleSelection = { selection?.toggle(memo.identifier) },
+                        onToggleSelection = {
+                            // 长按：先进入多选，再选中这一条
+                            selection?.start()
+                            selection?.toggle(memo.identifier)
+                        },
                         onTagClick = onTagClick
                         )
                     }
@@ -301,13 +321,13 @@ fun MemosList(
         viewModel.loadMemos()
     }
 
-    LaunchedEffect(filteredMemos.firstOrNull()?.identifier, layout) {
-        if (listTopId != null && filteredMemos.isNotEmpty() && listTopId != filteredMemos.first().identifier) {
+    LaunchedEffect(sortedMemos.firstOrNull()?.identifier, layout) {
+        if (listTopId != null && sortedMemos.isNotEmpty() && listTopId != sortedMemos.first().identifier) {
             // 网格有自己独立的滚动状态；切布局后要滚的是当前正在显示的那个。
             if (layout == ExploreLayout.LARGE) lazyListState.scrollToItem(0) else gridState.scrollToItem(0)
         }
 
-        listTopId = filteredMemos.firstOrNull()?.identifier
+        listTopId = sortedMemos.firstOrNull()?.identifier
     }
 
     when (val alert = syncAlert) {

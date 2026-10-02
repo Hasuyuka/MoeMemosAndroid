@@ -240,6 +240,16 @@ class SyncingRepository(
         return try {
             val memo = memoDao.getMemoById(identifier, accountKey)
                 ?: return ApiResponse.Failure.Exception(Exception("Memo not found"))
+            // 附件在这里一并删掉（连同本地文件）。
+            //
+            // 删除备忘走的是**软删除**（只把 isDeleted 置 true），所以 resources.memoId
+            // 上的外键级联（CASCADE）根本不触发——行还留在表里，而资源页的查询只看
+            // 资源表、不看它所属备忘是否已删，于是删掉的备忘的图片还会继续显示。
+            // 推送删除本身不需要附件，所以本地先删文件是安全的。
+            memoDao.getMemoResources(identifier, accountKey).forEach { resource ->
+                deleteLocalFile(resource)
+                memoDao.deleteResource(resource)
+            }
             memoDao.insertMemo(
                 memo.copy(
                     isDeleted = true,

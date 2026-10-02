@@ -2,6 +2,7 @@ package me.mudkip.moememos.ui.component
 
 import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,7 +58,19 @@ fun ArchivedMemoCard(
         modifier = Modifier
             .padding(horizontal = 15.dp, vertical = 10.dp)
             .fillMaxWidth()
-            .then(if (toggle != null) Modifier.clickable { toggle() } else Modifier)
+            .then(
+                if (toggle != null) {
+                    Modifier.clickable { toggle() }
+                } else if (onToggleSelection != null) {
+                    // 和主列表一致：长按进入批量编辑并选中这一条
+                    Modifier.combinedClickable(
+                        onClick = {},
+                        onLongClick = { onToggleSelection.invoke() },
+                    )
+                } else {
+                    Modifier
+                }
+            )
     ) {
         Column {
             Row(

@@ -33,15 +33,19 @@ import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.ext.updateCurrentUserSettings
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.component.DeleteSelectedDialog
-import me.mudkip.moememos.ui.component.SelectionStartButton
+import me.mudkip.moememos.ui.component.MemoSortBar
+import me.mudkip.moememos.ui.component.MemoSortButton
+import me.mudkip.moememos.ui.component.MemoSortDialog
 import me.mudkip.moememos.ui.component.SelectionTopBar
 import me.mudkip.moememos.ui.component.SyncStatusBadge
 import me.mudkip.moememos.ui.component.rememberRunOnSelection
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.ui.util.MemoSelectionState
+import me.mudkip.moememos.util.MemoSortMode
 import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
 import me.mudkip.moememos.viewmodel.ManualSyncResult
@@ -81,6 +85,9 @@ private fun MemosHomePageContent(
         }
     }
     var syncAlert by remember { mutableStateOf<HomeSyncAlert?>(null) }
+    var showSortDialog by remember { mutableStateOf(false) }
+    val sortMode = settings.usersList.firstOrNull { it.accountKey == settings.currentUser }
+        ?.settings?.memoSortMode ?: MemoSortMode.CREATED
 
     // 批量操作（多选）：入口放在顶栏的显式按钮上，不用长按——卡片的 LONG 手势
     // 已经被「进入编辑」占用（且用户可配置），两者会冲突。
@@ -158,7 +165,7 @@ private fun MemosHomePageContent(
                     }) {
                         Icon(Icons.Outlined.GridView, contentDescription = R.string.change_layout.string)
                     }
-                    SelectionStartButton(selection = selection, visibleCount = visibleIds.size)
+                    MemoSortButton(current = sortMode) { showSortDialog = true }
                     }
                 )
             }
@@ -193,6 +200,21 @@ private fun MemosHomePageContent(
             )
         }
     )
+
+    if (showSortDialog) {
+        MemoSortDialog(
+            current = sortMode,
+            onSelect = { mode ->
+                showSortDialog = false
+                scope.launch(Dispatchers.IO) {
+                    context.settingsDataStore.updateData { existing ->
+                        existing.updateCurrentUserSettings { it.copy(memoSortMode = mode) }
+                    }
+                }
+            },
+            onDismiss = { showSortDialog = false },
+        )
+    }
 
     if (showDeleteDialog) {
         DeleteSelectedDialog(

@@ -21,7 +21,6 @@ import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.component.DeleteSelectedDialog
-import me.mudkip.moememos.ui.component.SelectionStartButton
 import me.mudkip.moememos.ui.component.SelectionTopBar
 import me.mudkip.moememos.ui.component.rememberRunOnSelection
 import me.mudkip.moememos.ui.util.MemoSelectionState
@@ -97,8 +96,8 @@ fun ArchivedMemoPage(
                         }
                     },
                     actions = {
-                        // 归档为空时不给入口，免得进去只能看到 0 项。
-                        SelectionStartButton(selection = selection, visibleCount = visibleIds.size)
+                        // 多选入口改成「长按卡片」，顶栏不再放按钮
+                        // （否则和长按抢同一个手势，用户两边都记不住）。
                     }
                 )
             }

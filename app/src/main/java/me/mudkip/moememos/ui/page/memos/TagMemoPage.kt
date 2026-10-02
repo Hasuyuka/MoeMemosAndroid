@@ -30,14 +30,17 @@ import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.ext.updateCurrentUserSettings
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.component.DeleteSelectedDialog
-import me.mudkip.moememos.ui.component.SelectionStartButton
+import me.mudkip.moememos.ui.component.MemoSortButton
+import me.mudkip.moememos.ui.component.MemoSortDialog
 import me.mudkip.moememos.ui.component.SelectionTopBar
 import me.mudkip.moememos.ui.component.rememberRunOnSelection
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.ui.util.MemoSelectionState
+import me.mudkip.moememos.util.MemoSortMode
 import me.mudkip.moememos.util.contentHasTag
 import me.mudkip.moememos.viewmodel.LocalMemos
 
@@ -68,6 +71,9 @@ private fun TagMemoPageContent(
     val memosViewModel = LocalMemos.current
     val settings by context.settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())
     val selection = remember { MemoSelectionState() }
+    var showSortDialog by remember { mutableStateOf(false) }
+    val sortMode = settings.usersList.firstOrNull { it.accountKey == settings.currentUser }
+        ?.settings?.memoSortMode ?: MemoSortMode.CREATED
     var showDeleteDialog by remember { mutableStateOf(false) }
     val visibleIds = remember(memosViewModel.memos, tag) {
         memosViewModel.memos.filter { contentHasTag(it.content, tag) }.map { it.identifier }
@@ -116,7 +122,7 @@ private fun TagMemoPageContent(
                         }) {
                             Icon(Icons.Outlined.GridView, contentDescription = R.string.change_layout.string)
                         }
-                        SelectionStartButton(selection = selection, visibleCount = visibleIds.size)
+                        MemoSortButton(current = sortMode) { showSortDialog = true }
                     },
                 )
             }
@@ -158,6 +164,21 @@ private fun TagMemoPageContent(
             )
         }
     )
+
+    if (showSortDialog) {
+        MemoSortDialog(
+            current = sortMode,
+            onSelect = { mode ->
+                showSortDialog = false
+                scope.launch(Dispatchers.IO) {
+                    context.settingsDataStore.updateData { existing ->
+                        existing.updateCurrentUserSettings { it.copy(memoSortMode = mode) }
+                    }
+                }
+            },
+            onDismiss = { showSortDialog = false },
+        )
+    }
 
     if (showDeleteDialog) {
         DeleteSelectedDialog(
