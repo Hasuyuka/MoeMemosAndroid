@@ -1,7 +1,10 @@
 package me.mudkip.moememos.ui.page.memos
 
 import android.net.Uri
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -255,7 +258,12 @@ fun MemosList(
                 }
                 items(count = filteredMemos.size, key = { filteredMemos[it].identifier }) { index ->
                     val memo = filteredMemos[index]
-                    MemosCard(
+                    // IntrinsicSize.Min 让这一行的行高取所有卡片里最高的那个，
+                    // 卡片再用 fillMaxHeight 撑满，行内就齐平了。
+                    // 代价是内容会被测量两次——网格里的正文已经是 preview（截断过），
+                    // 测量的是一小棵树，可以接受。
+                    Box(modifier = Modifier.height(IntrinsicSize.Min)) {
+                        MemosCard(
                         memo = memo,
                         onClick = { selectedMemo ->
                             if (onMemoClick != null) {
@@ -274,7 +282,8 @@ fun MemosList(
                         selected = selection?.selected?.contains(memo.identifier) == true,
                         onToggleSelection = { selection?.toggle(memo.identifier) },
                         onTagClick = onTagClick
-                    )
+                        )
+                    }
                 }
             }
         }
