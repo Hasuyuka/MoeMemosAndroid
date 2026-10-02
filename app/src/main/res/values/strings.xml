@@ -15,6 +15,9 @@
     <string name="select">Select</string>
     <string name="select_all">Select all</string>
     <string name="change_layout">Switch layout</string>
+    <string name="reorder_images">Reorder images</string>
+    <string name="move_up">Move up</string>
+    <string name="move_down">Move down</string>
     <string name="image_quality">Upload image quality</string>
     <string name="image_quality_summary">Compresses JPEG/PNG attachments before upload. GIF and other formats are left untouched.</string>
     <string name="image_quality_original">Original</string>

@@ -19,6 +19,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.local.entity.ResourceEntity
+import me.mudkip.moememos.util.restampDatesInOrder
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.service.MemoService
 import me.mudkip.moememos.ext.settingsDataStore
@@ -95,6 +96,7 @@ class MemoInputViewModel @Inject constructor(
     suspend fun loadMemo(identifier: String): MemoEntity? = memoService.getRepository().getMemo(identifier)
 
     suspend fun createMemo(content: String, visibility: MemoVisibility, tags: List<String>): ApiResponse<MemoEntity> = withContext(viewModelScope.coroutineContext) {
+        applyUploadOrderToDates()
         val response = memoService.getRepository().createMemo(content, visibility, uploadResources, tags)
         // Update widgets when a new memo is created
         response.suspendOnSuccess {
@@ -104,12 +106,32 @@ class MemoInputViewModel @Inject constructor(
     }
 
     suspend fun editMemo(identifier: String, content: String, visibility: MemoVisibility, tags: List<String>): ApiResponse<MemoEntity> = withContext(viewModelScope.coroutineContext) {
+        applyUploadOrderToDates()
         val response = memoService.getRepository().updateMemo(identifier, content, uploadResources, visibility, tags)
         // Update widgets when a memo is edited
         response.suspendOnSuccess {
             WidgetUpdater.updateWidgets(getApplication())
         }
         response
+    }
+
+    /**
+     * 把用户在编辑器里排好的附件顺序写进「创建时间」。
+     *
+     * 顺序在数据里只有这一个落点（附件顺序 = 创建时间先后）。不写回去的话，
+     * 保存后重新读出来又变成数据库返回的任意顺序。
+     */
+    private fun applyUploadOrderToDates() {
+        if (uploadResources.size < 2) {
+            return
+        }
+        val ordered = restampDatesInOrder(
+            items = uploadResources,
+            dateOf = { it.date },
+            withDate = { resource, date -> resource.copy(date = date) },
+        )
+        uploadResources.clear()
+        uploadResources.addAll(ordered)
     }
 
     fun updateDraft(content: String) {

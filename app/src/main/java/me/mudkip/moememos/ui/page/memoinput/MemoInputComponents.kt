@@ -12,8 +12,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -30,7 +33,10 @@ import androidx.compose.material.icons.outlined.FormatItalic
 import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.FormatStrikethrough
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
@@ -39,12 +45,18 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import me.mudkip.moememos.ui.component.ActionIconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
@@ -57,6 +69,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
@@ -267,6 +280,8 @@ internal fun MemoInputEditor(
     val attachmentResources = remember(uploadResources) {
         uploadResources.filterNot { it.mimeType?.startsWith("image/") == true }
     }
+    // 系统选图器不保证按点击顺序返回（实测确实会乱），所以编辑器里给一个手动排序入口。
+    var showReorderDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier
@@ -309,6 +324,27 @@ internal fun MemoInputEditor(
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
         )
 
+        if (imageResources.size > 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 15.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { showReorderDialog = true }) {
+                    Icon(
+                        Icons.Outlined.SwapVert,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.reorder_images),
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+                }
+            }
+        }
+
         if (imageResources.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier
@@ -341,6 +377,103 @@ internal fun MemoInputEditor(
             }
         }
     }
+
+    if (showReorderDialog) {
+        ReorderImagesDialog(
+            resources = imageResources,
+            onConfirm = { orderedIdentifiers ->
+                // 只改顺序，不动日期：日期在保存/同步时按新顺序统一盖章。
+                val byId = uploadResources.associateBy { it.identifier }
+                val reordered = orderedIdentifiers.mapNotNull { byId[it] }
+                // 非图片附件保持在后面，不参与图片排序
+                val others = uploadResources.filter { it.mimeType?.startsWith("image/") != true }
+                uploadResources.clear()
+                uploadResources.addAll(reordered + others)
+                showReorderDialog = false
+            },
+            onDismiss = { showReorderDialog = false },
+        )
+    }
+}
+
+/**
+ * 图片排序对话框：一个带序号的列表，每行两个上下箭头。
+ *
+ * 选中「确定」后才写回，取消则不动原顺序——排序是个有后果的操作，
+ * 让人可以先试再决定。
+ */
+@Composable
+internal fun ReorderImagesDialog(
+    resources: List<ResourceEntity>,
+    onConfirm: (List<String>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var order by remember(resources) { mutableStateOf(resources.map { it.identifier }) }
+
+    fun move(index: Int, delta: Int) {
+        val target = index + delta
+        if (target !in order.indices) return
+        order = order.toMutableList().apply {
+            add(target, removeAt(index))
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.reorder_images)) },
+        text = {
+            LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                items(order.size) { index ->
+                    val identifier = order[index]
+                    val resource = resources.firstOrNull { it.identifier == identifier }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "${index + 1}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.width(24.dp),
+                        )
+                        Text(
+                            text = resource?.filename ?: "",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(
+                            enabled = index > 0,
+                            onClick = { move(index, -1) },
+                        ) {
+                            Icon(
+                                Icons.Outlined.KeyboardArrowUp,
+                                contentDescription = stringResource(R.string.move_up),
+                            )
+                        }
+                        IconButton(
+                            enabled = index < order.size - 1,
+                            onClick = { move(index, 1) },
+                        ) {
+                            Icon(
+                                Icons.Outlined.KeyboardArrowDown,
+                                contentDescription = stringResource(R.string.move_down),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(order) }) { Text(stringResource(R.string.save)) }
+        },
+    )
 }
 
 @Composable

@@ -15,6 +15,9 @@
     <string name="select">多選</string>
     <string name="select_all">全選</string>
     <string name="change_layout">切換版面</string>
+    <string name="reorder_images">調整圖片順序</string>
+    <string name="move_up">上移</string>
+    <string name="move_down">下移</string>
     <string name="image_quality">上傳圖片品質</string>
     <string name="image_quality_summary">上傳前壓縮 JPEG / PNG 附件；GIF 等格式不處理。</string>
     <string name="image_quality_original">原圖</string>

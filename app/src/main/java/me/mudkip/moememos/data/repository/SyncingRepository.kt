@@ -900,6 +900,10 @@ class SyncingRepository(
             }
         }
 
+        // 已经存在的附件**保留本地日期**：顺序信息只存在这一个字段里，如果这里改用
+        // 服务端的时间戳，用户在编辑器里排好的顺序每次同步都会被冲回创建顺序。
+        // 新附件才用服务端日期，并且接在本地已有的最后（它确实是新的）。
+        val localLatestResourceDate = currentResources.maxOfOrNull { it.date }
         remoteMemo.resources.forEach { resource ->
             val remoteResourceId = remoteResourceId(resource)
             val existing = currentResources.firstOrNull { it.remoteId == remoteResourceId }
@@ -914,7 +918,8 @@ class SyncingRepository(
                     identifier = localResourceIdentifier,
                     remoteId = remoteResourceId,
                     accountKey = accountKey,
-                    date = resource.date,
+                    date = existing?.date
+                        ?: nextResourceDate(localLatestResourceDate, resource.date),
                     filename = resource.filename,
                     uri = resource.uri,
                     localUri = preferredLocalUri,
