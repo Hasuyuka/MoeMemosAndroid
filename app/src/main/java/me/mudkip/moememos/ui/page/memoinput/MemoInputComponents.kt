@@ -382,13 +382,7 @@ internal fun MemoInputEditor(
         ReorderImagesDialog(
             resources = imageResources,
             onConfirm = { orderedIdentifiers ->
-                // 只改顺序，不动日期：日期在保存/同步时按新顺序统一盖章。
-                val byId = uploadResources.associateBy { it.identifier }
-                val reordered = orderedIdentifiers.mapNotNull { byId[it] }
-                // 非图片附件保持在后面，不参与图片排序
-                val others = uploadResources.filter { it.mimeType?.startsWith("image/") != true }
-                uploadResources.clear()
-                uploadResources.addAll(reordered + others)
+                inputViewModel.applyImageOrder(orderedIdentifiers)
                 showReorderDialog = false
             },
             onDismiss = { showReorderDialog = false },
