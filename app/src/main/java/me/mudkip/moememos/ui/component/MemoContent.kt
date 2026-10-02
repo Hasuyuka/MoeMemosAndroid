@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.local.entity.ResourceEntity
 import me.mudkip.moememos.data.model.MemoRepresentable
+import me.mudkip.moememos.data.model.Resource
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.page.common.RouteName
@@ -244,7 +245,13 @@ private fun isPreviewWhitespaceToken(node: ASTNode): Boolean {
 fun MemoResourceContent(memo: MemoRepresentable) {
     val cols = 3
     val context = LocalContext.current
-    val imageList = memo.resources.filter { it.mimeType?.startsWith("image/") == true }
+    val allImages = memo.resources.filter { it.mimeType?.startsWith("image/") == true }
+    // 按上传先后排，不能直接用列表顺序：
+    // 读附件的 SQL 没有 ORDER BY（@Relation 也无法指定顺序），数据库返回什么顺序
+    // 就会显示成什么顺序——重新加载一次，图片位置就变了。
+    // `date` 在写入时保证同一条备忘内严格递增（见 nextResourceDate），所以按它排序
+    // 得到的就是用户当初点选的顺序。
+    val imageList = remember(allImages) { allImages.sortedWith(UPLOAD_ORDER) }
     val imageUrls = remember(imageList) {
         imageList.map { resource -> resource.localUri ?: resource.uri }
     }
@@ -281,7 +288,18 @@ fun MemoResourceContent(memo: MemoRepresentable) {
             }
         }
     }
-    memo.resources.filterNot { it.mimeType?.startsWith("image/") == true }.forEach { resource ->
-        Attachment(resource)
-    }
+    memo.resources.filterNot { it.mimeType?.startsWith("image/") == true }
+        .sortedWith(UPLOAD_ORDER)
+        .forEach { resource ->
+            Attachment(resource)
+        }
 }
+
+/**
+ * 附件的显示顺序：先按创建时间，日期相同时再按文件名兜底。
+ *
+ * 兜底不是可有可无的——排序必须是一个**全序**，否则两个日期相同的附件之间
+ * 顺序仍然由实现决定，等于没排。
+ */
+private val UPLOAD_ORDER: Comparator<Resource> =
+    compareBy({ it.date }, { it.filename })

@@ -35,6 +35,7 @@ import me.mudkip.moememos.data.model.User
 import me.mudkip.moememos.data.model.compressibleImageFormat
 import me.mudkip.moememos.ext.getErrorMessage
 import me.mudkip.moememos.util.extractCustomTags
+import me.mudkip.moememos.util.nextResourceDate
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import java.io.File
@@ -345,11 +346,19 @@ class SyncingRepository(
                 sourceUri = contentUri,
                 filename = storedName
             )
+            // 附件顺序就是用户点选图片的顺序。一次上传十几张时，循环里的时间戳常落在同一毫秒里，
+            // 日期一旦并列，排序就分不出先后，图片显示顺序会变成数据库的任意返回顺序。
+            // 所以这里保证同一条备忘内时间严格递增（比上一张晚至少 1 毫秒）。
+            val previousResourceDate = if (memoIdentifier.isNullOrBlank()) {
+                null
+            } else {
+                memoDao.getMemoResources(memoIdentifier, accountKey).lastOrNull()?.date
+            }
             val resource = ResourceEntity(
                 identifier = UUID.randomUUID().toString(),
                 remoteId = null,
                 accountKey = accountKey,
-                date = Instant.now(),
+                date = nextResourceDate(previousResourceDate, Instant.now()),
                 filename = filename,
                 uri = uri.toString(),
                 localUri = uri.toString(),

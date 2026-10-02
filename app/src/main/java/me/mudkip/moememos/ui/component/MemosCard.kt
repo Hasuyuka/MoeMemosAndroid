@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -93,6 +94,9 @@ fun MemosCard(
             vertical = if (dense) 4.dp else 10.dp
         )
         .fillMaxWidth()
+        // 多列模式下撑满所在行的高度：行高由该行最高的卡片决定，不这样做的话
+        // 同一行会参差不齐（短卡片下面留一大片空白）。
+        .then(if (dense) Modifier.fillMaxHeight() else Modifier)
         .then(
             if (toggleSelection != null) {
                 Modifier.clickable { toggleSelection() }

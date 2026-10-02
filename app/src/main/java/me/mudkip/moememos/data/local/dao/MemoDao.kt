@@ -128,7 +128,13 @@ interface MemoDao {
     @Delete
     suspend fun deleteMemo(memo: MemoEntity)
 
-    @Query("SELECT * FROM resources WHERE memoId = :memoId AND accountKey = :accountKey")
+    // 必须按创建时间升序：附件顺序是用户选图的顺序，不能交给数据库随意返回。
+    // 同一条备忘内的时间戳在写入时保证严格递增（见 nextResourceDate），
+    // 所以这里不需要再加第二排序键。文件名留作兜底，避免历史数据并列时顺序不定。
+    @Query(
+        "SELECT * FROM resources WHERE memoId = :memoId AND accountKey = :accountKey " +
+            "ORDER BY date ASC, filename ASC"
+    )
     suspend fun getMemoResources(memoId: String, accountKey: String): List<ResourceEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
