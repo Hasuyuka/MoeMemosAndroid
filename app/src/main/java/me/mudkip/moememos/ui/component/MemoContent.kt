@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.local.entity.ResourceEntity
 import me.mudkip.moememos.data.model.MemoRepresentable
-import me.mudkip.moememos.data.model.Resource
+import me.mudkip.moememos.data.model.ResourceRepresentable
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.page.common.RouteName
@@ -301,5 +301,5 @@ fun MemoResourceContent(memo: MemoRepresentable) {
  * 兜底不是可有可无的——排序必须是一个**全序**，否则两个日期相同的附件之间
  * 顺序仍然由实现决定，等于没排。
  */
-private val UPLOAD_ORDER: Comparator<Resource> =
+private val UPLOAD_ORDER: Comparator<ResourceRepresentable> =
     compareBy({ it.date }, { it.filename })
