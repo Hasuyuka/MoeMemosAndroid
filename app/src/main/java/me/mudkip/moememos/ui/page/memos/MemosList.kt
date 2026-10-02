@@ -79,6 +79,8 @@ fun MemosList(
     val context = LocalContext.current
     val navController = LocalRootNavController.current
     val viewModel = LocalMemos.current
+    // 网格模式有自己独立的滚动状态（大卡片模式仍然用传进来的 lazyListState）。
+    val gridState = rememberLazyGridState()
     val userStateViewModel = LocalUserState.current
     val currentAccount by userStateViewModel.currentAccount.collectAsStateWithLifecycle()
     val settings by context.settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())
@@ -154,7 +156,6 @@ fun MemosList(
         state = refreshState,
         modifier = Modifier.fillMaxSize()
     ) {
-        val gridState = rememberLazyGridState()
         when (layout) {
         ExploreLayout.LARGE -> LazyColumn(
             modifier = Modifier
