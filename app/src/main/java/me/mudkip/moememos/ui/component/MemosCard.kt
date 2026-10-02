@@ -67,6 +67,8 @@ fun MemosCard(
     editGesture: MemoEditGesture = MemoEditGesture.NONE,
     previewMode: Boolean = false,
     showSyncStatus: Boolean = false,
+    /** 是否渲染附件图片。三列布局那种窄格子里关掉，省下下载与解码。 */
+    showResources: Boolean = true,
     onTagClick: ((String) -> Unit)? = null
 ) {
     val memosViewModel = LocalMemos.current
@@ -151,6 +153,7 @@ fun MemosCard(
             MemoContent(
                 memo,
                 previewMode = previewMode,
+                showResources = showResources,
                 checkboxChange = { checked, startOffset, endOffset ->
                     scope.launch {
                         var text = memo.content.substring(startOffset, endOffset)

@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,10 +25,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Account
+import me.mudkip.moememos.data.model.Settings
+import me.mudkip.moememos.ext.settingsDataStore
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.component.SyncStatusBadge
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
@@ -60,6 +64,9 @@ private fun MemosHomePageContent(
     val memosViewModel = LocalMemos.current
     val userStateViewModel = LocalUserState.current
     val currentAccount by userStateViewModel.currentAccount.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    // 顶栏那个布局按钮切换的就是它；「发现」页读的是同一份设置，两个页面保持一致。
+    val settings by context.settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())
     val syncStatus by memosViewModel.syncStatus.collectAsStateWithLifecycle()
 
     val expandedFab by remember {
@@ -113,6 +120,16 @@ private fun MemosHomePageContent(
                     }) {
                         Icon(Icons.Filled.Search, contentDescription = R.string.search.string)
                     }
+                    // 布局切换：点一次换下一档（大卡片 → 两列 → 三列 → 大卡片），选择会记住。
+                    ActionIconButton(label = R.string.change_layout.string, onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            context.settingsDataStore.updateData { existing ->
+                                existing.copy(exploreLayout = existing.exploreLayout.next())
+                            }
+                        }
+                    }) {
+                        Icon(Icons.Outlined.GridView, contentDescription = R.string.change_layout.string)
+                    }
                 }
             )
         },
@@ -134,6 +151,7 @@ private fun MemosHomePageContent(
                 lazyListState = listState,
                 contentPadding = innerPadding,
                 additionalBottomPadding = MemoListFabAvoidancePadding,
+                layout = settings.exploreLayout,
                 onRefresh = { requestManualSync() },
                 onTagClick = { tag ->
                     navController.navigate("${RouteName.TAG}/${URLEncoder.encode(tag, "UTF-8")}") {
