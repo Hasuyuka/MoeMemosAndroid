@@ -56,10 +56,10 @@ class MemoSortTest {
     }
 
     @Test
-    fun `按字母排序`() {
+    fun `按字母降序是 Z 到 A`() {
         val list = listOf(memo("c", content = "cherry"), memo("a", content = "apple"), memo("b", content = "banana"))
         assertEquals(
-            listOf("a", "b", "c"),
+            listOf("c", "b", "a"),
             sortMemos(list, MemoSortMode.TITLE, MemoSortDirection.DESCENDING, collator).map { it.identifier }
         )
     }
