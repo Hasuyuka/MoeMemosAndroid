@@ -48,7 +48,7 @@ enum class FontScale(val factor: Float) {
 }
 
 /**
- * 灵感页的布局。
+ * 备忘卡片的布局。两个页面共用这一个设置：「灵感」（MemosHomePage）和「发现」（ExplorePage）。
  *
  * 三档的取舍是「一眼能看多少条」与「要不要图片预览」：
  * 三列档刻意不显示附件图片——列窄了图片基本看不清，却照样要下载和解码，
@@ -68,4 +68,20 @@ enum class ExploreLayout {
 
     /** 点一次换下一档；顺序即按钮的循环顺序。 */
     fun next(): ExploreLayout = entries[(ordinal + 1) % entries.size]
+
+    /**
+     * 这一档要不要显示附件图片。
+     *
+     * 写成枚举上的一个属性，而不是在两个页面里各写一遍
+     * `layout == TWO_COLUMN`——那种重复迟早会让两边跑偏。
+     */
+    val showsImages: Boolean get() = this != THREE_COLUMN
+
+    /** 列数；大卡片不算列，返回 1。 */
+    val columns: Int
+        get() = when (this) {
+            LARGE -> 1
+            TWO_COLUMN -> 2
+            THREE_COLUMN -> 3
+        }
 }

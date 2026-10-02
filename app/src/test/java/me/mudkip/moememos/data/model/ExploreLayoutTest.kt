@@ -1,6 +1,7 @@
 package me.mudkip.moememos.data.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -39,5 +40,21 @@ class ExploreLayoutTest {
         }
         assertEquals(ExploreLayout.entries.size, reached.size)
         assertTrue(reached.containsAll(ExploreLayout.entries.toList()))
+    }
+
+    @Test
+    fun `只有三列档不显示图片`() {
+        // 这条规则原先在两个页面里各写了一遍 `layout == TWO_COLUMN`，重复的判断迟早跑偏，
+        // 所以收进枚举里，并在这里钉住。
+        assertTrue(ExploreLayout.LARGE.showsImages)
+        assertTrue(ExploreLayout.TWO_COLUMN.showsImages)
+        assertFalse(ExploreLayout.THREE_COLUMN.showsImages)
+    }
+
+    @Test
+    fun `列数对得上档位`() {
+        assertEquals(1, ExploreLayout.LARGE.columns)
+        assertEquals(2, ExploreLayout.TWO_COLUMN.columns)
+        assertEquals(3, ExploreLayout.THREE_COLUMN.columns)
     }
 }

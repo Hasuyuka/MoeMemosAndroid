@@ -7,6 +7,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,6 +38,7 @@ import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.model.Account
+import me.mudkip.moememos.data.model.ExploreLayout
 import me.mudkip.moememos.data.model.MemoEditGesture
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.ext.settingsDataStore
@@ -65,10 +70,17 @@ fun MemosList(
     memos: List<MemoEntity>? = null,
     /** 列表顶部的可选插槽（例如搜索页的最近搜索）。为 null 时行为与从前完全一致。 */
     header: (@Composable () -> Unit)? = null,
+    /**
+     * 卡片布局。大卡片是默认行为；两列/三列是顶栏那个布局按钮切出来的。
+     * 不传就是大卡片，所以标签页、归档页、搜索页不受影响。
+     */
+    layout: ExploreLayout = ExploreLayout.LARGE,
 ) {
     val context = LocalContext.current
     val navController = LocalRootNavController.current
     val viewModel = LocalMemos.current
+    // 网格模式有自己独立的滚动状态（大卡片模式仍然用传进来的 lazyListState）。
+    val gridState = rememberLazyGridState()
     val userStateViewModel = LocalUserState.current
     val currentAccount by userStateViewModel.currentAccount.collectAsStateWithLifecycle()
     val settings by context.settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())
@@ -144,7 +156,8 @@ fun MemosList(
         state = refreshState,
         modifier = Modifier.fillMaxSize()
     ) {
-        LazyColumn(
+        when (layout) {
+        ExploreLayout.LARGE -> LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .consumeWindowInsets(contentPadding),
@@ -198,6 +211,63 @@ fun MemosList(
                 )
             }
         }
+
+        ExploreLayout.TWO_COLUMN, ExploreLayout.THREE_COLUMN -> {
+            // 三列档不显示图片：列窄了图片基本看不清，却照样要下载和解码。
+            val showImages = layout.showsImages
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(layout.columns),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .consumeWindowInsets(contentPadding),
+                state = gridState,
+                contentPadding = listContentPadding
+            ) {
+                // 非卡片行都要占满整行，否则会被挤进一个格子里。
+                if (header != null) {
+                    item(key = "header", span = { GridItemSpan(maxLineSpan) }) { header() }
+                }
+                viewModel.errorMessage?.let { message ->
+                    item(key = "error", span = { GridItemSpan(maxLineSpan) }) {
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                        )
+                    }
+                }
+                if (filteredMemos.isEmpty()) {
+                    item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
+                        val message = when {
+                            !searchString.isNullOrEmpty() ->
+                                stringResource(R.string.no_search_results, searchString)
+                            tag != null -> stringResource(R.string.no_memos_with_tag)
+                            else -> stringResource(R.string.no_memos)
+                        }
+                        Text(message, modifier = Modifier.padding(24.dp))
+                    }
+                }
+                items(count = filteredMemos.size, key = { filteredMemos[it].identifier }) { index ->
+                    val memo = filteredMemos[index]
+                    MemosCard(
+                        memo = memo,
+                        onClick = { selectedMemo ->
+                            if (onMemoClick != null) {
+                                onMemoClick(selectedMemo.identifier)
+                            } else navController.navigate(
+                                "${RouteName.MEMO_DETAIL}?memoId=${Uri.encode(selectedMemo.identifier)}"
+                            )
+                        },
+                        editGesture = editGesture ?: MemoEditGesture.NONE,
+                        previewMode = true,
+                        showSyncStatus = currentAccount !is Account.Local,
+                        showResources = showImages,
+                        onTagClick = onTagClick
+                    )
+                }
+            }
+        }
+        }
     }
 
     LaunchedEffect(viewModel.errorMessage) {
@@ -211,9 +281,10 @@ fun MemosList(
         viewModel.loadMemos()
     }
 
-    LaunchedEffect(filteredMemos.firstOrNull()?.identifier) {
+    LaunchedEffect(filteredMemos.firstOrNull()?.identifier, layout) {
         if (listTopId != null && filteredMemos.isNotEmpty() && listTopId != filteredMemos.first().identifier) {
-            lazyListState.scrollToItem(0)
+            // 网格有自己独立的滚动状态；切布局后要滚的是当前正在显示的那个。
+            if (layout == ExploreLayout.LARGE) lazyListState.scrollToItem(0) else gridState.scrollToItem(0)
         }
 
         listTopId = filteredMemos.firstOrNull()?.identifier

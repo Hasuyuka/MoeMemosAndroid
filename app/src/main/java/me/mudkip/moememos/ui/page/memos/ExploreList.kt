@@ -81,9 +81,9 @@ internal fun ExploreListContent(
 
         ExploreLayout.TWO_COLUMN, ExploreLayout.THREE_COLUMN -> {
             // 三列档不显示图片：列窄了图片基本看不清，却照样要下载和解码。
-            val showImages = layout == ExploreLayout.TWO_COLUMN
+            val showImages = layout.showsImages
             LazyVerticalGrid(
-                columns = GridCells.Fixed(if (showImages) 2 else 3),
+                columns = GridCells.Fixed(layout.columns),
                 modifier = Modifier.consumeWindowInsets(contentPadding),
                 contentPadding = edgeToEdgeContentPadding(contentPadding),
             ) {
