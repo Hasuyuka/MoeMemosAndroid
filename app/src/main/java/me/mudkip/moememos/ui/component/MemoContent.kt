@@ -301,5 +301,5 @@ fun MemoResourceContent(memo: MemoRepresentable) {
  * 兜底不是可有可无的——排序必须是一个**全序**，否则两个日期相同的附件之间
  * 顺序仍然由实现决定，等于没排。
  */
-private val UPLOAD_ORDER: Comparator<ResourceRepresentable> =
+internal val UPLOAD_ORDER: Comparator<ResourceRepresentable> =
     compareBy({ it.date }, { it.filename })

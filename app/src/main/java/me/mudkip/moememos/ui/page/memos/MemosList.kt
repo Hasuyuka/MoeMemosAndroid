@@ -1,10 +1,8 @@
 package me.mudkip.moememos.ui.page.memos
 
 import android.net.Uri
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -222,8 +220,8 @@ fun MemosList(
         }
 
         ExploreLayout.TWO_COLUMN, ExploreLayout.THREE_COLUMN -> {
-            // 三列档不显示图片：列窄了图片基本看不清，却照样要下载和解码。
-            val showImages = layout.showsImages
+            // 网格里两种档位都用同一套固定尺寸卡片（见 CompactGridBody）：
+            // 两行文字 + 3 列 × 2 行缩略图，超出封顶。
             LazyVerticalGrid(
                 columns = GridCells.Fixed(layout.columns),
                 modifier = Modifier
@@ -258,11 +256,11 @@ fun MemosList(
                 }
                 items(count = filteredMemos.size, key = { filteredMemos[it].identifier }) { index ->
                     val memo = filteredMemos[index]
-                    // IntrinsicSize.Min 让这一行的行高取所有卡片里最高的那个，
-                    // 卡片再用 fillMaxHeight 撑满，行内就齐平了。
-                    // 代价是内容会被测量两次——网格里的正文已经是 preview（截断过），
-                    // 测量的是一小棵树，可以接受。
-                    Box(modifier = Modifier.height(IntrinsicSize.Min)) {
+                    // 卡片高度固定 = 头部 + 两行文字 + 两行缩略图，与内容多少无关，
+                    // 网格因此在视觉上是整齐的。缩略图是正方形，边长由格子宽度决定，
+                    // 所以高度要按实际宽度算（BoxWithConstraints）。
+                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                        val thumb = (maxWidth - GridCardPadding) / GRID_THUMB_COLUMNS
                         MemosCard(
                         memo = memo,
                         onClick = { selectedMemo ->
@@ -273,11 +271,11 @@ fun MemosList(
                             )
                         },
                         editGesture = editGesture ?: MemoEditGesture.NONE,
-                        previewMode = true,
                         showSyncStatus = currentAccount !is Account.Local,
-                        showResources = showImages,
                         // 多列时收紧卡片间距：大卡片那种 15dp 并排起来会变成一道大沟。
                         dense = true,
+                        gridCardHeight = GridCardHeaderHeight + GridCardTextHeight +
+                            GRID_THUMB_ROWS * thumb,
                         selectionMode = selection?.isSelecting == true,
                         selected = selection?.selected?.contains(memo.identifier) == true,
                         onToggleSelection = { selection?.toggle(memo.identifier) },
@@ -373,6 +371,16 @@ fun MemosList(
         }
     }
 }
+
+// ---- 网格卡片尺寸 ----
+// 卡片高度 = 固定的头部与文字高度 + 两行正方形缩略图。
+// 缩略图边长随格子宽度变化，所以高度也跟着变；同一屏里所有列宽相同，
+// 因此所有卡片高度一致，视觉上是整齐的。
+private val GridCardHeaderHeight = 26.dp
+private val GridCardTextHeight = 44.dp
+
+/** 卡片自身的外边距 + 内边距，缩略图边长要减掉它。 */
+private val GridCardPadding = 22.dp
 
 private sealed class PullRefreshSyncAlert {
     data class Blocked(val message: String) : PullRefreshSyncAlert()
