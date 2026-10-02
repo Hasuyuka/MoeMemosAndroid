@@ -61,6 +61,8 @@ private fun TagMemoPageContent(
     onMemoClick: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    // 必须在 composable 里取出来：onClick 不是 composable lambda，在里面读 CompositionLocal 编译不过。
+    val rootNavController = LocalRootNavController.current
     val normalizedCurrentTag = remember(tag) { normalizeTag(tag) }
     val context = LocalContext.current
     val memosViewModel = LocalMemos.current
@@ -68,7 +70,7 @@ private fun TagMemoPageContent(
     val selection = remember { MemoSelectionState() }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val visibleIds = remember(memosViewModel.memos, tag) {
-        memosViewModel.memos.filter { it.contentHasTag(tag) }.map { it.identifier }
+        memosViewModel.memos.filter { contentHasTag(it.content, tag) }.map { it.identifier }
     }
     val selectedCount = selection.visibleCountIn(visibleIds)
     val runOnSelection = rememberRunOnSelection(
@@ -126,7 +128,7 @@ private fun TagMemoPageContent(
                     // INPUT 路由注册在**根**导航图上，而这里是标签页自己的子图控制器；
                     // 用子图控制器跳一个不存在的目的地会直接抛 IllegalArgumentException（闪退）。
                     // 备忘详情页的跳转同理，所以这个页面一直用的是 rootNavController。
-                    LocalRootNavController.current.navigate(
+                    rootNavController.navigate(
                         "${RouteName.INPUT}?tag=${java.net.URLEncoder.encode(tag, "UTF-8")}"
                     )
                 },
