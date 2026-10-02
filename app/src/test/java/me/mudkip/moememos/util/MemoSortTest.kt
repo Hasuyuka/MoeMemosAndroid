@@ -42,7 +42,7 @@ class MemoSortTest {
             memo("old", created = base),
             memo("new", created = base.plusSeconds(60)),
         )
-        assertEquals(listOf("new", "old"), sortMemos(list, MemoSortMode.CREATED, collator).map { it.identifier })
+        assertEquals(listOf("new", "old"), sortMemos(list, MemoSortMode.CREATED, MemoSortDirection.DESCENDING, collator).map { it.identifier })
     }
 
     @Test
@@ -52,7 +52,7 @@ class MemoSortTest {
             memo("a", created = base.plusSeconds(100), modified = base),
             memo("b", created = base, modified = base.plusSeconds(100)),
         )
-        assertEquals(listOf("b", "a"), sortMemos(list, MemoSortMode.UPDATED, collator).map { it.identifier })
+        assertEquals(listOf("b", "a"), sortMemos(list, MemoSortMode.UPDATED, MemoSortDirection.DESCENDING, collator).map { it.identifier })
     }
 
     @Test
@@ -60,23 +60,25 @@ class MemoSortTest {
         val list = listOf(memo("c", content = "cherry"), memo("a", content = "apple"), memo("b", content = "banana"))
         assertEquals(
             listOf("a", "b", "c"),
-            sortMemos(list, MemoSortMode.TITLE, collator).map { it.identifier }
+            sortMemos(list, MemoSortMode.TITLE, MemoSortDirection.DESCENDING, collator).map { it.identifier }
         )
     }
 
     @Test
     fun `置顶的永远在最前`() {
-        // 三种排序方式都必须保留置顶优先，否则置顶的备忘会沉底
+        // 三种排序方式、两个方向都必须保留置顶优先，否则置顶的备忘会沉底
         val list = listOf(
             memo("normal", created = base.plusSeconds(100)),
             memo("pinned", content = "aaa", created = base, pinned = true),
         )
         MemoSortMode.entries.forEach { mode ->
-            assertEquals(
-                "模式 $mode 下置顶项应在最前",
-                listOf("pinned", "normal"),
-                sortMemos(list, mode, collator).map { it.identifier },
-            )
+            MemoSortDirection.entries.forEach { direction ->
+                assertEquals(
+                    "模式 $mode / $direction 下置顶项应在最前",
+                    listOf("pinned", "normal"),
+                    sortMemos(list, mode, direction, collator).map { it.identifier },
+                )
+            }
         }
     }
 
@@ -85,9 +87,11 @@ class MemoSortTest {
         // 两张时间戳完全一样（同一毫秒保存的），顺序也必须确定，不能每次刷新都换
         val list = listOf(memo("b"), memo("a"))
         MemoSortMode.entries.forEach { mode ->
-            val once = sortMemos(list, mode, collator).map { it.identifier }
-            val twice = sortMemos(list, mode, collator).map { it.identifier }
-            assertEquals("模式 $mode 的结果应可复现", once, twice)
+            MemoSortDirection.entries.forEach { direction ->
+                val once = sortMemos(list, mode, direction, collator).map { it.identifier }
+                val twice = sortMemos(list, mode, direction, collator).map { it.identifier }
+                assertEquals("模式 $mode / $direction 的结果应可复现", once, twice)
+            }
         }
     }
 
