@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -63,6 +64,7 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
@@ -82,6 +84,7 @@ import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ext.titleResource
 import me.mudkip.moememos.ui.component.Attachment
 import me.mudkip.moememos.ui.component.InputImage
+import me.mudkip.moememos.ui.component.MemoImage
 import me.mudkip.moememos.viewmodel.MemoInputViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -432,13 +435,19 @@ internal fun ReorderImagesDialog(
                             color = MaterialTheme.colorScheme.outline,
                             modifier = Modifier.width(24.dp),
                         )
-                        Text(
-                            text = resource?.filename ?: "",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
+                        // 用缩略图而不是文件名：手机相册导出的名字多半是
+                        // 1000017284.jpg 这种数字编号，光看名字认不出是哪张图。
+                        MemoImage(
+                            url = resource?.localUri ?: resource?.uri ?: "",
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            // 传空回调：不传的话 MemoImage 会按系统查看器打开，
+                            // 在排序对话框里点一下就跳走，体验很糟。
+                            onClick = {},
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.weight(1f))
                         IconButton(
                             enabled = index > 0,
                             onClick = { move(index, -1) },
