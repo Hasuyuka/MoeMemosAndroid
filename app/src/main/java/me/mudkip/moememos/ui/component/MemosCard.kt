@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.text.format.DateUtils
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Archive
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -69,36 +72,54 @@ fun MemosCard(
     showSyncStatus: Boolean = false,
     /** 是否渲染附件图片。三列布局那种窄格子里关掉，省下下载与解码。 */
     showResources: Boolean = true,
+    /** 网格/多列布局：收紧卡片内外边距。大卡片那种 15dp 在两列并排时会变成一道大沟。 */
+    dense: Boolean = false,
+    /** 多选模式：整张卡片可点按勾选，右上角的操作菜单让位给复选框。 */
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null,
     onTagClick: ((String) -> Unit)? = null
 ) {
     val memosViewModel = LocalMemos.current
     val rootNavController = LocalRootNavController.current
     val scope = rememberCoroutineScope()
 
+    // 多选模式下点击是「勾选」，不再打开备忘；编辑手势也一并让位，免得两个含义打架。
+    val toggleSelection = if (selectionMode) onToggleSelection else null
+
     val cardModifier = Modifier
-        .padding(horizontal = 15.dp, vertical = 10.dp)
+        .padding(
+            horizontal = if (dense) 4.dp else 15.dp,
+            vertical = if (dense) 4.dp else 10.dp
+        )
         .fillMaxWidth()
-        .combinedClickable(
-            onClick = {
-                if (editGesture == MemoEditGesture.SINGLE) {
-                    rootNavController.navigateToMemoEditor(memo.identifier)
-                } else {
-                    onClick(memo)
-                }
-            },
-            onLongClick = if (editGesture == MemoEditGesture.LONG) {
-                {
-                    rootNavController.navigateToMemoEditor(memo.identifier)
-                }
+        .then(
+            if (toggleSelection != null) {
+                Modifier.clickable { toggleSelection() }
             } else {
-                null
-            },
-            onDoubleClick = if (editGesture == MemoEditGesture.DOUBLE) {
-                {
-                    rootNavController.navigateToMemoEditor(memo.identifier)
-                }
-            } else {
-                null
+                Modifier.combinedClickable(
+                    onClick = {
+                        if (editGesture == MemoEditGesture.SINGLE) {
+                            rootNavController.navigateToMemoEditor(memo.identifier)
+                        } else {
+                            onClick(memo)
+                        }
+                    },
+                    onLongClick = if (editGesture == MemoEditGesture.LONG) {
+                        {
+                            rootNavController.navigateToMemoEditor(memo.identifier)
+                        }
+                    } else {
+                        null
+                    },
+                    onDoubleClick = if (editGesture == MemoEditGesture.DOUBLE) {
+                        {
+                            rootNavController.navigateToMemoEditor(memo.identifier)
+                        }
+                    } else {
+                        null
+                    }
+                )
             }
         )
 
@@ -113,10 +134,17 @@ fun MemosCard(
         Column {
             Row(
                 modifier = Modifier
-                    .padding(start = 15.dp)
+                    .padding(start = if (dense) 8.dp else 15.dp)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (selectionMode) {
+                    Checkbox(
+                        checked = selected,
+                        onCheckedChange = { toggleSelection?.invoke() },
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
                 Text(
                     DateUtils.getRelativeTimeSpanString(
                         memo.date.toEpochMilli(),
@@ -147,7 +175,12 @@ fun MemosCard(
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                MemosCardActionButton(memo)
+                if (selectionMode) {
+                    // 多选模式下让位给复选框，避免一边勾选一边误触菜单。
+                    Spacer(modifier = Modifier.width(15.dp))
+                } else {
+                    MemosCardActionButton(memo)
+                }
             }
 
             MemoContent(

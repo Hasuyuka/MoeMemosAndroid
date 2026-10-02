@@ -1,20 +1,14 @@
 package me.mudkip.moememos.ui.page.memos
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.outlined.Checklist
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Restore
-import androidx.compose.material.icons.outlined.SelectAll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,11 +16,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
 import me.mudkip.moememos.ext.string
+import me.mudkip.moememos.ui.component.DeleteSelectedDialog
+import me.mudkip.moememos.ui.component.SelectionStartButton
+import me.mudkip.moememos.ui.component.SelectionTopBar
+import me.mudkip.moememos.ui.component.rememberRunOnSelection
 import me.mudkip.moememos.ui.util.MemoSelectionState
 import me.mudkip.moememos.viewmodel.ArchivedMemoListViewModel
 import me.mudkip.moememos.viewmodel.LocalMemos
@@ -39,8 +36,8 @@ import me.mudkip.moememos.viewmodel.LocalMemos
  * 两者就会冲突（OPEN-7）。用顶栏入口，这个冲突根本不存在——不需要替用户决定
  * 长按手势该归谁。
  *
- * 批量删除带二次确认，且确认文案里明确写了「无法撤销」：撤销能力（REQ-603）尚未实现，
- * 与其让用户以为有后悔药，不如说清楚。
+ * 顶栏、批量执行、删除确认这几块与主列表、标签页共用 `MemoSelectionBar`，
+ * 三处各抄一份必然走偏。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,52 +50,41 @@ fun ArchivedMemoPage(
     val selection = remember { MemoSelectionState() }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val memos = viewModel.memos
-    val selectedCount = selection.visibleCountIn(memos.map { it.identifier })
+    val visibleIds = remember(memos) { memos.map { it.identifier } }
+    val selectedCount = selection.visibleCountIn(visibleIds)
 
-    fun runOnSelection(action: suspend (String) -> Unit) {
-        // 先取快照：批量操作会逐个把条目移出列表，边遍历边读列表会漏掉后面的条目。
-        val identifiers = memos.map { it.identifier }.filter { it in selection.selected }
-        if (identifiers.isEmpty()) {
-            return
-        }
-        scope.launch {
-            identifiers.forEach { action(it) }
-            // 恢复出来的备忘要出现在主列表上，否则用户以为恢复失败了。
-            memosViewModel.refreshLocalSnapshot()
-            selection.exit()
-        }
-    }
+    val runRestore = rememberRunOnSelection(
+        scope = scope,
+        selection = selection,
+        visibleIds = visibleIds,
+        onItem = { viewModel.restoreMemo(it) },
+        // 恢复出来的备忘要出现在主列表上，否则用户以为恢复失败了。
+        onFinished = { memosViewModel.refreshLocalSnapshot() },
+    )
+    val runDelete = rememberRunOnSelection(
+        scope = scope,
+        selection = selection,
+        visibleIds = visibleIds,
+        onItem = { viewModel.deleteMemo(it) },
+        onFinished = { memosViewModel.refreshLocalSnapshot() },
+    )
 
     Scaffold(
         topBar = {
             if (selection.isSelecting) {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.selected_count, selectedCount)) },
-                    navigationIcon = {
-                        IconButton(onClick = { selection.exit() }) {
-                            Icon(Icons.Filled.Close, contentDescription = R.string.cancel.string)
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { selection.selectAllOf(memos.map { it.identifier }) }) {
-                            Icon(
-                                Icons.Outlined.SelectAll,
-                                contentDescription = R.string.select_all.string
-                            )
-                        }
+                SelectionTopBar(
+                    selection = selection,
+                    visibleIds = visibleIds,
+                    selectedCount = selectedCount,
+                    onDeleteRequest = { showDeleteDialog = true },
+                    extraActions = {
                         IconButton(
                             enabled = selectedCount > 0,
-                            onClick = { runOnSelection { viewModel.restoreMemo(it) } },
+                            onClick = { runRestore() },
                         ) {
                             Icon(Icons.Outlined.Restore, contentDescription = R.string.restore.string)
                         }
-                        IconButton(
-                            enabled = selectedCount > 0,
-                            onClick = { showDeleteDialog = true },
-                        ) {
-                            Icon(Icons.Outlined.Delete, contentDescription = R.string.delete.string)
-                        }
-                    }
+                    },
                 )
             } else {
                 TopAppBar(
@@ -112,14 +98,7 @@ fun ArchivedMemoPage(
                     },
                     actions = {
                         // 归档为空时不给入口，免得进去只能看到 0 项。
-                        if (memos.isNotEmpty()) {
-                            IconButton(onClick = { selection.start() }) {
-                                Icon(
-                                    Icons.Outlined.Checklist,
-                                    contentDescription = R.string.select.string
-                                )
-                            }
-                        }
+                        SelectionStartButton(selection = selection, visibleCount = visibleIds.size)
                     }
                 )
             }
@@ -135,23 +114,13 @@ fun ArchivedMemoPage(
     )
 
     if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text(R.string.delete.string) },
-            text = { Text(stringResource(R.string.delete_selected_confirm, selectedCount)) },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text(R.string.cancel.string)
-                }
+        DeleteSelectedDialog(
+            count = selectedCount,
+            onDismiss = { showDeleteDialog = false },
+            onConfirm = {
+                showDeleteDialog = false
+                runDelete()
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDeleteDialog = false
-                    runOnSelection { viewModel.deleteMemo(it) }
-                }) {
-                    Text(R.string.delete.string)
-                }
-            }
         )
     }
 }
