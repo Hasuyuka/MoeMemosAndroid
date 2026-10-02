@@ -29,8 +29,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Settings
+import me.mudkip.moememos.data.model.updateCurrentUserSettings
 import me.mudkip.moememos.ext.settingsDataStore
-import me.mudkip.moememos.ext.updateCurrentUserSettings
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.component.DeleteSelectedDialog
 import me.mudkip.moememos.ui.component.MemoSortButton
