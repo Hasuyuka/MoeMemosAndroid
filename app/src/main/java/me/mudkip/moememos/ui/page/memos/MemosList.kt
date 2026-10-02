@@ -45,6 +45,8 @@ import me.mudkip.moememos.data.model.MemoEditGesture
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.ext.settingsDataStore
 import me.mudkip.moememos.ext.string
+import me.mudkip.moememos.ui.component.GRID_THUMB_COLUMNS
+import me.mudkip.moememos.ui.component.GRID_THUMB_ROWS
 import me.mudkip.moememos.ui.component.MemosCard
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.util.edgeToEdgeContentPadding
