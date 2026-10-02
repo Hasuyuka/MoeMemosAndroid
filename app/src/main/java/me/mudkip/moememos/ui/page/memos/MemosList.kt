@@ -277,8 +277,7 @@ fun MemosList(
                         showSyncStatus = currentAccount !is Account.Local,
                         // 多列时收紧卡片间距：大卡片那种 15dp 并排起来会变成一道大沟。
                         dense = true,
-                        gridCardHeight = GridCardHeaderHeight + GridCardTextHeight +
-                            GRID_THUMB_ROWS * thumb,
+                        gridCardHeight = GridCardHeaderHeight + GridCardTextHeight + thumb * GRID_THUMB_ROWS,
                         selectionMode = selection?.isSelecting == true,
                         selected = selection?.selected?.contains(memo.identifier) == true,
                         onToggleSelection = { selection?.toggle(memo.identifier) },
