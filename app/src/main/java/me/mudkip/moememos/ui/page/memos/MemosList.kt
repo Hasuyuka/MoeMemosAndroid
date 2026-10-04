@@ -393,11 +393,14 @@ fun MemosList(
         }
     }
 
+    // rememberUpdatedState 必须写在 DisposableEffect **外面**：它是 @Composable 函数，
+// 而 effect 的块不是组合上下文，在里面调用编译不过。
+val latestLayout by rememberUpdatedState(layout)
+val latestMemos by rememberUpdatedState(sortedMemos)
+
     // 离开列表时无条件记一次：这里的值才是用户真正的"离开位置"，
     // 包括他自己滚回了顶部（上面那个副作用不会记录这种情况）。
     DisposableEffect(Unit) {
-        val latestLayout by rememberUpdatedState(layout)
-        val latestMemos by rememberUpdatedState(sortedMemos)
         onDispose {
             val index: Int
             val offset: Int
