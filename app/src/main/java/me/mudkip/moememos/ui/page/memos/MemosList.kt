@@ -29,11 +29,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlowCoroutineScope
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
@@ -355,14 +354,22 @@ fun MemosList(
     //
     // 判据是"当前停在顶部、但记着的位置不是顶部"——只有真的被重置过才会触发，
     // 正常浏览时这个副作用不会打扰用户。
+    //
+    // 两个分支分开写：LazyListState 和 LazyGridState 若放进同一个 if/else 赋值，
+    // 会被推断成共同父类 ScrollableState，而那上面没有 scrollToItem。
     LaunchedEffect(sortedMemos, layout) {
         val anchor = viewModel.scrollAnchor ?: return@LaunchedEffect
         if (anchor.layout != layout) return@LaunchedEffect
-        val state = if (layout == ExploreLayout.LARGE) lazyListState else gridState
-        if (state.firstVisibleItemIndex != 0 || state.firstVisibleItemScrollOffset != 0) return@LaunchedEffect
         val target = sortedMemos.indexOfFirst { it.identifier == anchor.identifier }
-        if (target > 0) {
-            state.scrollToItem(target, anchor.offset)
+        if (target <= 0) return@LaunchedEffect
+        if (layout == ExploreLayout.LARGE) {
+            if (lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0) {
+                lazyListState.scrollToItem(target, anchor.offset)
+            }
+        } else {
+            if (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0) {
+                gridState.scrollToItem(target, anchor.offset)
+            }
         }
     }
 
