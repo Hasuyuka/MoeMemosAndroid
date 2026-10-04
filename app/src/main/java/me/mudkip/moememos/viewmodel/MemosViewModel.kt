@@ -29,6 +29,7 @@ import kotlinx.coroutines.withContext
 import me.mudkip.moememos.data.constant.MemosVersionSupport
 import me.mudkip.moememos.data.constant.MoeMemosException
 import me.mudkip.moememos.data.local.entity.MemoEntity
+import me.mudkip.moememos.data.model.ExploreLayout
 import me.mudkip.moememos.data.local.entity.ResourceEntity
 import me.mudkip.moememos.data.model.DailyUsageStat
 import me.mudkip.moememos.data.model.MemoVisibility
@@ -43,6 +44,18 @@ import java.time.OffsetDateTime
 import javax.inject.Inject
 
 @HiltViewModel
+/**
+ * 列表的滚动锚点。
+ *
+ * @param identifier 第一条可见备忘的 id（不是 index，index 会随增删漂移）
+ * @param offset 该条内部的像素偏移
+ * @param layout 记录时的布局；布局换了就不恢复——两者的位置单位没有可比性
+ */
+data class MemoScrollAnchor(
+    val identifier: String,
+    val offset: Int,
+    val layout: ExploreLayout,
+)
 class MemosViewModel @Inject constructor(
     private val memoService: MemoService,
     private val accountService: AccountService,
@@ -57,6 +70,23 @@ class MemosViewModel @Inject constructor(
         private set
     var matrix by mutableStateOf(DailyUsageStat.initialMatrix)
         private set
+
+    /**
+     * 列表滚动锚点：离开列表时第一条可见备忘的 id、它的像素偏移，以及当时的布局。
+     *
+     * 记 id 而不是 index——列表增删会让 index 漂移，隔一天回来同一个 index
+     * 早就不是同一篇了。
+     *
+     * 放在 ViewModel 而不是 `rememberSaveable`：打开备忘详情再返回时列表会整个
+     * 重新组合，实测滚动位置会丢（用户反馈"点开一篇再返回就跳回最上面"），
+     * ViewModel 在导航往返之间不会重建，才有可靠的落点。
+     */
+    var scrollAnchor: MemoScrollAnchor? by mutableStateOf(null)
+        private set
+
+    fun saveScrollAnchor(anchor: MemoScrollAnchor?) {
+        scrollAnchor = anchor
+    }
 
     /**
      * 归档备忘。**按需加载**：只有搜索页切到「包含归档」时才会去查，
