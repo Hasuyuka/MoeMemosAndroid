@@ -106,10 +106,11 @@ fun SearchPage(navController: NavHostController) {
     }
 
     // 为 null 表示沿用 MemosList 自己的数据源（默认只搜当前列表）。
+    // key 用版本号而不是列表副本：.toList() 每次重组都会复制整表，
+    // 而 Compose 还要把新旧 key 逐条比相等（见 MemosList 里同样的说明）。
     val scopeMemos: List<MemoEntity>? = remember(
         effectiveIncludeArchived,
-        viewModel.memos.toList(),
-        viewModel.archivedMemos.toList(),
+        viewModel.listRevision,
     ) {
         if (effectiveIncludeArchived) viewModel.memos + viewModel.archivedMemos else null
     }

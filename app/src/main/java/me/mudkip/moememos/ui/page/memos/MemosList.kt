@@ -115,10 +115,21 @@ fun MemosList(
     var isRefreshing by remember { mutableStateOf(false) }
     var syncAlert by remember { mutableStateOf<PullRefreshSyncAlert?>(null) }
     val sourceMemos = memos ?: viewModel.memos
-    val filteredMemos = remember(sourceMemos.toList(), tag, searchString) {
-        val pinned = sourceMemos.filter { it.pinned }
-        val nonPinned = sourceMemos.filter { !it.pinned }
-        var fullList = pinned + nonPinned
+    // 过滤和排序合成一次计算，key 全部是便宜的类型。
+    //
+    // 原来这里有两个 remember，其中一个拿 `sourceMemos.toList()` 当 key：为了让 key
+    // 每次重组都"看起来变了"而做的整表复制，接着 Compose 又要把新旧两个 key 逐条
+    // 比相等——几千条备忘时这一项就能吃掉一帧。现在用版本号（O(1)）加源列表自身的
+    // 引用（同一个对象时 equals 立刻返回），内容真的变了才重新过滤排序。
+    val sortedMemos = remember(
+        sourceMemos,
+        viewModel.listRevision,
+        tag,
+        searchString,
+        currentSortMode,
+        currentSortDirection,
+    ) {
+        var fullList = sourceMemos.filter { it.pinned } + sourceMemos.filter { !it.pinned }
 
         tag?.let { tag ->
             fullList = fullList.filter { memo -> contentHasTag(memo.content, tag) }
@@ -141,12 +152,9 @@ fun MemosList(
             }
         }
 
-        fullList
-    }
-    // 排序在过滤之后做：置顶优先由 sortMemos 统一保证（过滤阶段那个 pinned + nonPinned
-    // 只是让过滤少做一点无谓的比较，最终顺序仍以这里为准）。
-    val sortedMemos = remember(filteredMemos, currentSortMode, currentSortDirection) {
-        sortMemos(filteredMemos, currentSortMode, currentSortDirection)
+        // 置顶优先由 sortMemos 统一保证（上面那个 pinned + nonPinned 只是让过滤少做
+        // 一点无谓的比较，最终顺序仍以这里为准）。
+        sortMemos(fullList, currentSortMode, currentSortDirection)
     }
     val listContentPadding = edgeToEdgeContentPadding(
         contentPadding,

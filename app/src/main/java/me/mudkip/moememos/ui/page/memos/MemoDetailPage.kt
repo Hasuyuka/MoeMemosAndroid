@@ -73,7 +73,9 @@ internal fun MemoDetailContent(memoIdentifier: String, onBack: () -> Unit) {
     val userStateViewModel = LocalUserState.current
     val currentAccount by userStateViewModel.currentAccount.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    val memo = remember(memosViewModel.memos.toList(), memoIdentifier) {
+    // key 用版本号：`.toList()` 每次重组都会复制整表，Compose 还要把新旧 key
+    // 逐条比相等（见 MemosList 里同样的说明）。
+    val memo = remember(memosViewModel.listRevision, memoIdentifier) {
         memosViewModel.memos.firstOrNull { it.identifier == memoIdentifier }
     }
     var hadMemo by rememberSaveable(memoIdentifier) { mutableStateOf(false) }

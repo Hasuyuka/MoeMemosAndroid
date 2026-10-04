@@ -28,8 +28,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.mudkip.moememos.data.constant.MemosVersionSupport
 import me.mudkip.moememos.data.constant.MoeMemosException
+import androidx.compose.runtime.mutableIntStateOf
 import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.model.ExploreLayout
+import me.mudkip.moememos.util.planMemoListUpdate
 import me.mudkip.moememos.data.local.entity.ResourceEntity
 import me.mudkip.moememos.data.model.DailyUsageStat
 import me.mudkip.moememos.data.model.MemoVisibility
@@ -64,6 +66,17 @@ class MemosViewModel @Inject constructor(
 ) : ViewModel() {
 
     var memos = mutableStateListOf<MemoEntity>()
+        private set
+
+    /**
+     * 列表内容版本号，每次 [applyMemos] 真正改动列表就 +1。
+     *
+     * 列表页用它当 `remember` 的 key。原先是拿整个列表当 key，而列表是 Compose 的
+     * 可观察集合——为了让 key 每次重组都"看起来变了"，代码里写的是
+     * `remember(sourceMemos.toList(), ...)`，那会在每次重组时复制一遍全表，
+     * 再把上万个实体逐条比相等。几千条备忘时这一项就能吃掉一帧。
+     */
+    var listRevision by mutableIntStateOf(0)
         private set
     var tags = mutableStateListOf<String>()
         private set
@@ -170,9 +183,28 @@ class MemosViewModel @Inject constructor(
         initialLoad.first { it }
     }
 
+    /**
+     * 原地更新列表。
+     *
+     * 之前是 `clear()` + `addAll()`：列表先清空再填满，Compose 只能把所有卡片销毁重建，
+     * 图片请求也全部重来——同步一次就是一次全量重绘。备忘和图片多起来之后光这一下就足以卡住。
+     * 现在按 [planMemoListUpdate] 的方案只改动真正变了的那些条目，内容没变的保留原引用。
+     */
     private fun applyMemos(latestMemos: List<MemoEntity>) {
-        memos.clear()
-        memos.addAll(latestMemos)
+        val plan = planMemoListUpdate(memos, latestMemos)
+        if (plan.removeFromTail > 0 || plan.edits.isNotEmpty()) {
+            repeat(plan.removeFromTail) { memos.removeAt(memos.size - 1) }
+            plan.edits.forEach { edit ->
+                if (edit.index < memos.size) {
+                    memos[edit.index] = edit.memo
+                } else {
+                    memos.add(edit.memo)
+                }
+            }
+            // 内容变了，版本号 +1：列表页拿它当 remember 的 key，比拿整个列表当 key
+            // 便宜得多（后者每次重组都要复制整表再逐条比相等）。
+            listRevision++
+        }
         errorMessage = null
     }
 
