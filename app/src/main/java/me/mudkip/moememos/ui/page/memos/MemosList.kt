@@ -24,12 +24,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -344,7 +346,39 @@ fun MemosList(
         if (layout == ExploreLayout.LARGE) lazyListState.scrollToItem(0) else gridState.scrollToItem(0)
     }
 
-    // 记录滚动锚点，离开列表（打开某篇备忘）时记下第一条可见的位置。
+    // 恢复滚动位置。
+    //
+    // 放在保存锚点的副作用**之前**：副作用按声明顺序启动，声明在前才能保证
+    // 恢复读到的是上一次真正记下的位置，而不是刚回到列表时那个"位置还是 0"的默认值。
+    //
+    // 判据是"当前停在顶部、但记着的位置不是顶部"——只有状态真的被重置过才会触发。
+    //
+    // 两个分支分开写：LazyListState 和 LazyGridState 若放进同一个 if/else 赋值，
+    // 会被推断成共同父类 ScrollableState，而那上面没有 scrollToItem。
+    LaunchedEffect(sortedMemos, layout) {
+        val anchor = viewModel.scrollAnchor ?: return@LaunchedEffect
+        if (anchor.layout != layout) return@LaunchedEffect
+        val target = sortedMemos.indexOfFirst { it.identifier == anchor.identifier }
+        if (target < 0) return@LaunchedEffect
+        if (target == 0 && anchor.offset == 0) return@LaunchedEffect
+        if (layout == ExploreLayout.LARGE) {
+            if (lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0) {
+                lazyListState.scrollToItem(target, anchor.offset)
+            }
+        } else {
+            if (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0) {
+                gridState.scrollToItem(target, anchor.offset)
+            }
+        }
+    }
+
+    // 滚动时更新锚点。
+    //
+    // 这里必须忽略「位置 = 0」这个取值：回到列表后的第一帧状态还没恢复，读到的就是 0，
+    // 如果照写就会把上一次记好的位置抹掉——恢复那一步随后拿到的正是被抹掉的值，
+    // 于是永远跳回顶部（这个 bug 真的发生过一次）。
+    //
+    // 「用户自己滚回顶部」的情况由下面的 onDispose 负责记录，那里是无条件写的。
     LaunchedEffect(lazyListState, gridState, sortedMemos, layout) {
         snapshotFlow {
             if (layout == ExploreLayout.LARGE) {
@@ -353,30 +387,29 @@ fun MemosList(
                 gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
             }
         }.collect { (index, offset) ->
+            if (index == 0 && offset == 0) return@collect
             val memo = sortedMemos.getOrNull(index) ?: return@collect
             viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, layout))
         }
     }
 
-    // 数据到位后，如果滚动位置确实丢了，就把人放回离开时的位置。
-    //
-    // 判据是"当前停在顶部、但记着的位置不是顶部"——只有真的被重置过才会触发，
-    // 正常浏览时这个副作用不会打扰用户。
-    //
-    // 两个分支分开写：LazyListState 和 LazyGridState 若放进同一个 if/else 赋值，
-    // 会被推断成共同父类 ScrollableState，而那上面没有 scrollToItem。
-    LaunchedEffect(sortedMemos, layout) {
-        val anchor = viewModel.scrollAnchor ?: return@LaunchedEffect
-        if (anchor.layout != layout) return@LaunchedEffect
-        val target = sortedMemos.indexOfFirst { it.identifier == anchor.identifier }
-        if (target <= 0) return@LaunchedEffect
-        if (layout == ExploreLayout.LARGE) {
-            if (lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0) {
-                lazyListState.scrollToItem(target, anchor.offset)
+    // 离开列表时无条件记一次：这里的值才是用户真正的"离开位置"，
+    // 包括他自己滚回了顶部（上面那个副作用不会记录这种情况）。
+    DisposableEffect(Unit) {
+        val latestLayout by rememberUpdatedState(layout)
+        val latestMemos by rememberUpdatedState(sortedMemos)
+        onDispose {
+            val index: Int
+            val offset: Int
+            if (latestLayout == ExploreLayout.LARGE) {
+                index = lazyListState.firstVisibleItemIndex
+                offset = lazyListState.firstVisibleItemScrollOffset
+            } else {
+                index = gridState.firstVisibleItemIndex
+                offset = gridState.firstVisibleItemScrollOffset
             }
-        } else {
-            if (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0) {
-                gridState.scrollToItem(target, anchor.offset)
+            latestMemos.getOrNull(index)?.let { memo ->
+                viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, latestLayout))
             }
         }
     }
