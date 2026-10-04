@@ -43,7 +43,6 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import javax.inject.Inject
 
-@HiltViewModel
 /**
  * 列表的滚动锚点。
  *
@@ -56,6 +55,8 @@ data class MemoScrollAnchor(
     val offset: Int,
     val layout: ExploreLayout,
 )
+
+@HiltViewModel
 class MemosViewModel @Inject constructor(
     private val memoService: MemoService,
     private val accountService: AccountService,
