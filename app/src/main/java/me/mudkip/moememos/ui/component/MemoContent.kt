@@ -3,6 +3,7 @@ package me.mudkip.moememos.ui.component
 import android.content.Intent
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextDecoration
@@ -44,6 +47,14 @@ fun MemoContent(
     previewMode: Boolean = false,
     /** 是否渲染附件（图片等）。三列布局那种窄格子里关掉，省下下载与解码。 */
     showResources: Boolean = true,
+    /**
+     * 卡片里最多渲染几张图片，超出的折成最后一张上的 "+N"。
+     *
+     * 列表必须设上限：一条带三十张照片的备忘如果全渲染，光这一张卡就要跑三十次
+     * 图片解码，滚动时每滑过去一次就重来一遍——这才是"备忘和图片多了就卡"的主因。
+     * 详情页传 [Int.MAX_VALUE] 保持全显示，点开查看器里本来就是全部图片。
+     */
+    maxResourceImages: Int = MAX_RESOURCE_IMAGES_IN_CARD,
     checkboxChange: (checked: Boolean, startOffset: Int, endOffset: Int) -> Unit = { _, _, _ -> },
     onViewMore: (() -> Unit)? = null,
     selectable: Boolean = false,
@@ -78,7 +89,7 @@ fun MemoContent(
         )
 
         if (showResources) {
-            MemoResourceContent(memo)
+            MemoResourceContent(memo, maxImages = maxResourceImages)
         }
 
         if (previewed && onViewMore != null) {
@@ -241,8 +252,15 @@ private fun isPreviewWhitespaceToken(node: ASTNode): Boolean {
     return node.type == MarkdownTokenTypes.EOL || node.type == MarkdownTokenTypes.WHITE_SPACE
 }
 
+/** 卡片里最多渲染几张图片：九张刚好是三行三列，再多收益很小、开销线性增长。 */
+internal const val MAX_RESOURCE_IMAGES_IN_CARD = 9
+
 @Composable
-fun MemoResourceContent(memo: MemoRepresentable) {
+fun MemoResourceContent(
+    memo: MemoRepresentable,
+    /** 最多渲染几张，超出的折成最后一张上的 "+N"；[Int.MAX_VALUE] 表示全显示。 */
+    maxImages: Int = MAX_RESOURCE_IMAGES_IN_CARD,
+) {
     val cols = 3
     val context = LocalContext.current
     val allImages = memo.resources.filter { it.mimeType?.startsWith("image/") == true }
@@ -252,24 +270,27 @@ fun MemoResourceContent(memo: MemoRepresentable) {
     // `date` 在写入时保证同一条备忘内严格递增（见 nextResourceDate），所以按它排序
     // 得到的就是用户当初点选的顺序。
     val imageList = remember(allImages) { allImages.sortedWith(UPLOAD_ORDER) }
+    // 查看器里仍然是全部图片：卡片只是"少渲染几张"，不是"只能看几张"。
     val imageUrls = remember(imageList) {
         imageList.map { resource -> resource.localUri ?: resource.uri }
     }
-    if (imageList.isNotEmpty()) {
-        val rows = ceil(imageList.size.toFloat() / cols).toInt()
+    val shownImages = remember(imageList, maxImages) { imageList.take(maxImages) }
+    val hiddenCount = imageList.size - shownImages.size
+    if (shownImages.isNotEmpty()) {
+        val rows = ceil(shownImages.size.toFloat() / cols).toInt()
         for (rowIndex in 0 until rows) {
             Row {
                 for (colIndex in 0 until cols) {
                     val index = rowIndex * cols + colIndex
-                    if (index < imageList.size) {
+                    if (index < shownImages.size) {
                         Box(modifier = Modifier.fillMaxWidth(1f / (cols - colIndex))) {
                             MemoImage(
-                                url = imageList[index].localUri ?: imageList[index].uri,
+                                url = shownImages[index].localUri ?: shownImages[index].uri,
                                 modifier = Modifier
                                     .aspectRatio(1f)
                                     .padding(2.dp)
                                     .clip(RoundedCornerShape(4.dp)),
-                                resourceIdentifier = (imageList[index] as? ResourceEntity)?.identifier,
+                                resourceIdentifier = (shownImages[index] as? ResourceEntity)?.identifier,
                                 onClick = {
                                     context.startActivity(
                                         Intent(context, MediaViewerActivity::class.java).apply {
@@ -280,6 +301,20 @@ fun MemoResourceContent(memo: MemoRepresentable) {
                                     )
                                 }
                             )
+                            if (hiddenCount > 0 && index == shownImages.lastIndex) {
+                                Text(
+                                    text = "+$hiddenCount",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .background(
+                                            Color.Black.copy(alpha = 0.55f),
+                                            RoundedCornerShape(3.dp)
+                                        )
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
                         }
                     } else {
                         Spacer(modifier = Modifier.fillMaxWidth(1f / cols))

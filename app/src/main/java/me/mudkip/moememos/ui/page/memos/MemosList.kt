@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
@@ -61,6 +62,7 @@ import me.mudkip.moememos.util.sortMemos
 import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
 import me.mudkip.moememos.viewmodel.ManualSyncResult
+import me.mudkip.moememos.viewmodel.MemoScrollAnchor
 import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -145,9 +147,6 @@ fun MemosList(
     // 只是让过滤少做一点无谓的比较，最终顺序仍以这里为准）。
     val sortedMemos = remember(filteredMemos, currentSortMode, currentSortDirection) {
         sortMemos(filteredMemos, currentSortMode, currentSortDirection)
-    }
-    var listTopId: String? by rememberSaveable {
-        mutableStateOf(null)
     }
     val listContentPadding = edgeToEdgeContentPadding(
         contentPadding,
@@ -327,13 +326,51 @@ fun MemosList(
         viewModel.loadMemos()
     }
 
-    LaunchedEffect(sortedMemos.firstOrNull()?.identifier, layout) {
-        if (listTopId != null && sortedMemos.isNotEmpty() && listTopId != sortedMemos.first().identifier) {
-            // 网格有自己独立的滚动状态；切布局后要滚的是当前正在显示的那个。
-            if (layout == ExploreLayout.LARGE) lazyListState.scrollToItem(0) else gridState.scrollToItem(0)
-        }
+    // 只在**切换布局**时回到顶部。
+    //
+    // 之前这个副作用的触发条件里还包含"列表头那一篇变了"，结果是打开一篇备忘
+    // 再返回就会跳回最上面（按修改时间排序时，刚看过的备忘变成了最新的那条，
+    // 列表头随之改变）。数据变化——同步来了新备忘、排序方式换了——都不该把人
+    // 拽回顶部。
+    LaunchedEffect(layout) {
+        if (layout == ExploreLayout.LARGE) lazyListState.scrollToItem(0) else gridState.scrollToItem(0)
+    }
 
-        listTopId = sortedMemos.firstOrNull()?.identifier
+    // 记录滚动锚点，离开列表（打开某篇备忘）时记下第一条可见的位置。
+    LaunchedEffect(lazyListState, gridState, sortedMemos, layout) {
+        snapshotFlow {
+            if (layout == ExploreLayout.LARGE) {
+                lazyListState.firstVisibleItemIndex to lazyListState.firstVisibleItemScrollOffset
+            } else {
+                gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
+            }
+        }.collect { (index, offset) ->
+            val memo = sortedMemos.getOrNull(index) ?: return@collect
+            viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, layout))
+        }
+    }
+
+    // 数据到位后，如果滚动位置确实丢了，就把人放回离开时的位置。
+    //
+    // 判据是"当前停在顶部、但记着的位置不是顶部"——只有真的被重置过才会触发，
+    // 正常浏览时这个副作用不会打扰用户。
+    //
+    // 两个分支分开写：LazyListState 和 LazyGridState 若放进同一个 if/else 赋值，
+    // 会被推断成共同父类 ScrollableState，而那上面没有 scrollToItem。
+    LaunchedEffect(sortedMemos, layout) {
+        val anchor = viewModel.scrollAnchor ?: return@LaunchedEffect
+        if (anchor.layout != layout) return@LaunchedEffect
+        val target = sortedMemos.indexOfFirst { it.identifier == anchor.identifier }
+        if (target <= 0) return@LaunchedEffect
+        if (layout == ExploreLayout.LARGE) {
+            if (lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0) {
+                lazyListState.scrollToItem(target, anchor.offset)
+            }
+        } else {
+            if (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0) {
+                gridState.scrollToItem(target, anchor.offset)
+            }
+        }
     }
 
     when (val alert = syncAlert) {

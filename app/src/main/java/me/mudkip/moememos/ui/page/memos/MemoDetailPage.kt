@@ -161,6 +161,8 @@ internal fun MemoDetailContent(memoIdentifier: String, onBack: () -> Unit) {
             MemoContent(
                 memo = memo,
                 selectable = true,
+                // 详情页要看到全部图片：折叠 "+N" 是列表为了省解码开销的做法
+                maxResourceImages = Int.MAX_VALUE,
                 checkboxChange = { checked, startOffset, endOffset ->
                     scope.launch {
                         var text = memo.content.substring(startOffset, endOffset)
