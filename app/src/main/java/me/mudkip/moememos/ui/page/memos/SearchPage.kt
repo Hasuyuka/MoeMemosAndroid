@@ -55,6 +55,7 @@ import me.mudkip.moememos.data.model.updateCurrentUserSettings
 import me.mudkip.moememos.data.model.updateRecentSearches
 import me.mudkip.moememos.ext.popBackStackIfLifecycleIsResumed
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.ext.settingsState
 import me.mudkip.moememos.util.parseMemoQuery
 import me.mudkip.moememos.ui.component.ActionIconButton
 import me.mudkip.moememos.ui.page.common.RouteName
@@ -67,7 +68,7 @@ fun SearchPage(navController: NavHostController) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val viewModel = LocalMemos.current
-    val settings by context.settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())
+    val settings = context.settingsState()
     val recentSearches = settings.currentUserSettings().recentSearches
     val query = searchText.text.toString()
     var includeArchived by rememberSaveable { mutableStateOf(false) }

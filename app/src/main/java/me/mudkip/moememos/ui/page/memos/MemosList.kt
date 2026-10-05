@@ -50,6 +50,7 @@ import me.mudkip.moememos.data.model.ExploreLayout
 import me.mudkip.moememos.data.model.MemoEditGesture
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.ext.settingsState
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.component.GRID_THUMB_COLUMNS
 import me.mudkip.moememos.ui.component.GRID_THUMB_ROWS
@@ -110,7 +111,7 @@ fun MemosList(
     val gridState = rememberLazyGridState()
     val userStateViewModel = LocalUserState.current
     val currentAccount by userStateViewModel.currentAccount.collectAsStateWithLifecycle()
-    val settings by context.settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())
+    val settings = context.settingsState()
     val editGesture = settings.usersList
         .firstOrNull { it.accountKey == settings.currentUser }
         ?.settings

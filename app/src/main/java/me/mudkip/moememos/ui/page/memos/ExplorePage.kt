@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.ext.settingsState
 import me.mudkip.moememos.ext.string
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,7 +31,7 @@ fun ExplorePage(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val settings by context.settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())
+    val settings = context.settingsState()
 
     Scaffold(
         topBar = {

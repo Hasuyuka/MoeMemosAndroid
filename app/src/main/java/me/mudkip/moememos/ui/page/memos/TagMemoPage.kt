@@ -31,6 +31,7 @@ import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.data.model.updateCurrentUserSettings
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.ext.settingsState
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.component.DeleteSelectedDialog
 import me.mudkip.moememos.ui.component.MemoSortButton
@@ -70,7 +71,7 @@ private fun TagMemoPageContent(
     val normalizedCurrentTag = remember(tag) { normalizeTag(tag) }
     val context = LocalContext.current
     val memosViewModel = LocalMemos.current
-    val settings by context.settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())
+    val settings = context.settingsState()
     val selection = remember { MemoSelectionState() }
     var showSortDialog by remember { mutableStateOf(false) }
     val sortMode = settings.usersList.firstOrNull { it.accountKey == settings.currentUser }
