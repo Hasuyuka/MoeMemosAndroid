@@ -70,7 +70,11 @@ object ScrollTrace {
  * 而要看的恰恰是「点开备忘之前那一刻」和「返回之后那一刻」。
  */
 @Composable
-internal fun ScrollTraceOverlay(modifier: Modifier = Modifier) {
+internal fun ScrollTraceOverlay(
+    anchorText: String,
+    revision: Int,
+    modifier: Modifier = Modifier
+) {
     val lines = ScrollTrace.events
     if (lines.isEmpty()) return
 
@@ -80,8 +84,8 @@ internal fun ScrollTraceOverlay(modifier: Modifier = Modifier) {
             .padding(horizontal = 5.dp, vertical = 3.dp)
     ) {
         Text(
-            text = "MemosList 全新组合 ${ScrollTrace.composeCount} 次",
-            color = Color(0xFFB0B0B0),
+            text = "全新组合 ${ScrollTrace.composeCount} 次 | 锚点 $anchorText | rev=$revision",
+            color = Color(0xFFFFD479),
             fontSize = 8.sp,
             fontFamily = FontFamily.Monospace
         )

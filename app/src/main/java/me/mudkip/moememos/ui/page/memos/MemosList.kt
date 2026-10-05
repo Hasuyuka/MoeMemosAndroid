@@ -99,6 +99,10 @@ fun MemosList(
     // 诊断：本次组合的编号。列表页被真正销毁再重建时编号会变，用来判断
     // 「点开备忘到底有没有让这个组合消失」。
     val traceId = remember { ScrollTrace.newInstance() }
+    // 诊断：这一页的身份。scrollAnchor 是 ViewModel 上的单个字段，灵感/标签/搜索
+    // 三页共用且里面不记来源页——「记锚点」与「恢复」两行的这个标签若对不上，
+    // 就是拿 A 页的锚点去定位 B 页的列表，落点自然看着是随机的。
+    val tracePage = tracePageLabel(tag, searchString)
     // 网格模式有自己独立的滚动状态（大卡片模式仍然用传进来的 lazyListState）。
     val gridState = rememberLazyGridState()
     val userStateViewModel = LocalUserState.current
@@ -176,7 +180,7 @@ fun MemosList(
     // 「组合一直都在、只是位置被谁改了」——这是眼下最要紧的分歧。
     DisposableEffect(traceId) {
         ScrollTrace.record(
-            "#$traceId ENTER ${tracePageLabel(tag, searchString)}/${layout.name} " +
+            "#$traceId ENTER $tracePage/${layout.name} " +
                 "n=${sortedMemos.size} rev=${viewModel.listRevision} " +
                 "fv=${lazyListState.firstVisibleItemIndex}:${lazyListState.firstVisibleItemScrollOffset}"
         )
@@ -351,6 +355,12 @@ fun MemosList(
         }
 
         ScrollTraceOverlay(
+            // 锚点当前的真实值，独立于事件流水显示：万一某次写锚点没打日志，
+            // 这一行仍然是事实。
+            anchorText = viewModel.scrollAnchor?.let {
+                "${it.identifier.take(6)} off=${it.offset} ${it.layout.name}"
+            } ?: "无",
+            revision = viewModel.listRevision,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(4.dp)
@@ -453,13 +463,13 @@ val latestMemos by rememberUpdatedState(sortedMemos)
             return@LaunchedEffect
         }
         if (anchor.layout != layout) {
-            ScrollTrace.record("#$traceId 恢复 跳过:布局不符 ${anchor.layout.name}->${layout.name}")
+            ScrollTrace.record("#$traceId 恢复[$tracePage] 跳过:布局不符 ${anchor.layout.name}->${layout.name}")
             return@LaunchedEffect
         }
         val target = latestMemos.indexOfFirst { it.identifier == anchor.identifier }
         if (target < 0) {
             ScrollTrace.record(
-                "#$traceId 恢复 跳过:锚点不在当前列表 " +
+                "#$traceId 恢复[$tracePage] 跳过:锚点不在当前列表 " +
                     "id=${anchor.identifier.take(6)} n=${latestMemos.size}"
             )
             return@LaunchedEffect
@@ -473,16 +483,19 @@ val latestMemos by rememberUpdatedState(sortedMemos)
                 lazyListState.firstVisibleItemScrollOffset == 0
             if (!atTop) {
                 ScrollTrace.record(
-                    "#$traceId 恢复 跳过:当前不在顶部 " +
+                    "#$traceId 恢复[$tracePage] 跳过:当前不在顶部 " +
                         "fv=${lazyListState.firstVisibleItemIndex}:${lazyListState.firstVisibleItemScrollOffset}"
                 )
                 return@LaunchedEffect
             }
-            ScrollTrace.record("#$traceId 恢复 等布局 target=$target off=${anchor.offset}")
+            ScrollTrace.record(
+                "#$traceId 恢复[$tracePage] 等布局 id=${anchor.identifier.take(6)} " +
+                    "target=$target off=${anchor.offset}"
+            )
             snapshotFlow { lazyListState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
             lazyListState.scrollToItem(target, anchor.offset)
             ScrollTrace.record(
-                "#$traceId 恢复 已滚到 " +
+                "#$traceId 恢复[$tracePage] 已滚到 " +
                     "fv=${lazyListState.firstVisibleItemIndex}:${lazyListState.firstVisibleItemScrollOffset}"
             )
         } else {
@@ -490,16 +503,19 @@ val latestMemos by rememberUpdatedState(sortedMemos)
                 gridState.firstVisibleItemScrollOffset == 0
             if (!atTop) {
                 ScrollTrace.record(
-                    "#$traceId 恢复 跳过:当前不在顶部 " +
+                    "#$traceId 恢复[$tracePage] 跳过:当前不在顶部 " +
                         "gfv=${gridState.firstVisibleItemIndex}:${gridState.firstVisibleItemScrollOffset}"
                 )
                 return@LaunchedEffect
             }
-            ScrollTrace.record("#$traceId 恢复 等布局 target=$target off=${anchor.offset}")
+            ScrollTrace.record(
+                "#$traceId 恢复[$tracePage] 等布局 id=${anchor.identifier.take(6)} " +
+                    "target=$target off=${anchor.offset}"
+            )
             snapshotFlow { gridState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
             gridState.scrollToItem(target, anchor.offset)
             ScrollTrace.record(
-                "#$traceId 恢复 已滚到 " +
+                "#$traceId 恢复[$tracePage] 已滚到 " +
                     "gfv=${gridState.firstVisibleItemIndex}:${gridState.firstVisibleItemScrollOffset}"
             )
         }
@@ -536,7 +552,7 @@ val latestMemos by rememberUpdatedState(sortedMemos)
                 if (indexChanged) ScrollTrace.record("#$traceId 记锚点 越界 index=$index n=${latestMemos.size}")
             } else {
                 if (indexChanged) {
-                    ScrollTrace.record("#$traceId 记锚点 ${memo.identifier.take(6)} off=$offset")
+                    ScrollTrace.record("#$traceId 记锚点[$tracePage] ${memo.identifier.take(6)} off=$offset")
                 }
                 viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, layout))
             }
@@ -558,7 +574,7 @@ val latestMemos by rememberUpdatedState(sortedMemos)
             }
             latestMemos.getOrNull(index)?.let { memo ->
                 ScrollTrace.record(
-                    "#$traceId 离开 记锚点 ${memo.identifier.take(6)} " +
+                    "#$traceId 离开[$tracePage] 记锚点 ${memo.identifier.take(6)} " +
                         "off=$offset lay=${latestLayout.name} index=$index"
                 )
                 viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, latestLayout))
