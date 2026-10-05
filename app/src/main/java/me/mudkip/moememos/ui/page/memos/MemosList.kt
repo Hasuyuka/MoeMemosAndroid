@@ -1,6 +1,7 @@
 package me.mudkip.moememos.ui.page.memos
 
 import android.net.Uri
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
@@ -35,6 +36,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
@@ -94,6 +96,13 @@ fun MemosList(
     val context = LocalContext.current
     val navController = LocalRootNavController.current
     val viewModel = LocalMemos.current
+    // 诊断：本次组合的编号。列表页被真正销毁再重建时编号会变，用来判断
+    // 「点开备忘到底有没有让这个组合消失」。
+    val traceId = remember { ScrollTrace.newInstance() }
+    // 诊断：这一页的身份。scrollAnchor 是 ViewModel 上的单个字段，灵感/标签/搜索
+    // 三页共用且里面不记来源页——「记锚点」与「恢复」两行的这个标签若对不上，
+    // 就是拿 A 页的锚点去定位 B 页的列表，落点自然看着是随机的。
+    val tracePage = tracePageLabel(tag, searchString)
     // 网格模式有自己独立的滚动状态（大卡片模式仍然用传进来的 lazyListState）。
     val gridState = rememberLazyGridState()
     val userStateViewModel = LocalUserState.current
@@ -164,113 +173,69 @@ fun MemosList(
         additionalBottomPadding
     )
 
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = {
-            isRefreshing = true
-            scope.launch {
-                if (onRefresh != null) {
-                    onRefresh()
-                } else {
-                    when (val result = viewModel.refreshMemos()) {
-                        ManualSyncResult.Completed -> Unit
-                        is ManualSyncResult.Blocked -> {
-                            syncAlert = PullRefreshSyncAlert.Blocked(result.message)
-                        }
-                        is ManualSyncResult.RequiresConfirmation -> {
-                            syncAlert = PullRefreshSyncAlert.RequiresConfirmation(result.version, result.message)
-                        }
-                        is ManualSyncResult.Failed -> {
-                            syncAlert = PullRefreshSyncAlert.Failed(result.message)
-                        }
-                    }
-                }
-                isRefreshing = false
-            }
-        },
-        state = refreshState,
-        modifier = Modifier.fillMaxSize()
-    ) {
-        when (layout) {
-        ExploreLayout.LARGE -> LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .consumeWindowInsets(contentPadding),
-            state = lazyListState,
-            contentPadding = listContentPadding
-        ) {
-            if (header != null) {
-                item(key = "header") { header() }
-            }
+    // ---- 滚动位置诊断（临时代码，定位后整块删除）----
 
-            // 此前列表的错误只写进日志（见下方 LaunchedEffect），用户在界面上完全看不到：
-            // 同步失败时列表就是旧数据或空的，没有任何解释。现在在列表顶部直接展示，
-            // 下次加载成功后 MemosViewModel 会把 errorMessage 置空，它自然消失。
-            viewModel.errorMessage?.let { message ->
-                item(key = "error") {
-                    Text(
-                        text = message,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-                    )
-                }
-            }
-
-            if (sortedMemos.isEmpty()) {
-                item(key = "empty") {
-                    // 空列表有三种完全不同的成因，此前一律显示「No memos found」：
-                    // 用户搜了三个字却看到「没有备忘」，会以为自己把备忘弄丢了。
-                    val message = when {
-                        !searchString.isNullOrEmpty() ->
-                            stringResource(R.string.no_search_results, searchString)
-                        tag != null -> stringResource(R.string.no_memos_with_tag)
-                        else -> stringResource(R.string.no_memos)
-                    }
-                    Text(message, modifier = Modifier.padding(24.dp))
-                }
-            }
-            items(sortedMemos, key = { it.identifier }) { memo ->
-                MemosCard(
-                    memo = memo,
-                    onClick = { selectedMemo ->
-                        if (onMemoClick != null) {
-                            onMemoClick(selectedMemo.identifier)
-                        } else navController.navigate(
-                            "${RouteName.MEMO_DETAIL}?memoId=${Uri.encode(selectedMemo.identifier)}"
-                        )
-                    },
-                    editGesture = editGesture ?: MemoEditGesture.NONE,
-                    previewMode = true,
-                    showSyncStatus = currentAccount !is Account.Local,
-                    selectionMode = selection?.isSelecting == true,
-                    selected = selection?.selected?.contains(memo.identifier) == true,
-                    onToggleSelection = {
-                            // 长按：先进入多选，再选中这一条
-                            selection?.start()
-                            selection?.toggle(memo.identifier)
-                        },
-                    onTagClick = onTagClick
-                )
-            }
+    // ENTER 出现的次数 = 列表页这次组合被销毁重建过几次。点开一条备忘再返回时
+    // 这个次数涨不涨，直接区分「组合被重建、滚动状态随之丢失」和
+    // 「组合一直都在、只是位置被谁改了」——这是眼下最要紧的分歧。
+    DisposableEffect(traceId) {
+        ScrollTrace.record(
+            "#$traceId ENTER $tracePage/${layout.name} " +
+                "n=${sortedMemos.size} rev=${viewModel.listRevision} " +
+                "fv=${lazyListState.firstVisibleItemIndex}:${lazyListState.firstVisibleItemScrollOffset}"
+        )
+        onDispose {
+            ScrollTrace.record(
+                "#$traceId DISPOSE fv=${lazyListState.firstVisibleItemIndex}:${lazyListState.firstVisibleItemScrollOffset}"
+            )
         }
+    }
 
-        ExploreLayout.TWO_COLUMN, ExploreLayout.THREE_COLUMN -> {
-            // 网格里两种档位都用同一套固定尺寸卡片（见 CompactGridBody）：
-            // 两行文字 + 3 列 × 2 行缩略图，超出封顶。
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(layout.columns),
+    Box(modifier = Modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                isRefreshing = true
+                scope.launch {
+                    if (onRefresh != null) {
+                        onRefresh()
+                    } else {
+                        when (val result = viewModel.refreshMemos()) {
+                            ManualSyncResult.Completed -> Unit
+                            is ManualSyncResult.Blocked -> {
+                                syncAlert = PullRefreshSyncAlert.Blocked(result.message)
+                            }
+                            is ManualSyncResult.RequiresConfirmation -> {
+                                syncAlert = PullRefreshSyncAlert.RequiresConfirmation(result.version, result.message)
+                            }
+                            is ManualSyncResult.Failed -> {
+                                syncAlert = PullRefreshSyncAlert.Failed(result.message)
+                            }
+                        }
+                    }
+                    isRefreshing = false
+                }
+            },
+            state = refreshState,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            when (layout) {
+            ExploreLayout.LARGE -> LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .consumeWindowInsets(contentPadding),
-                state = gridState,
+                state = lazyListState,
                 contentPadding = listContentPadding
             ) {
-                // 非卡片行都要占满整行，否则会被挤进一个格子里。
                 if (header != null) {
-                    item(key = "header", span = { GridItemSpan(maxLineSpan) }) { header() }
+                    item(key = "header") { header() }
                 }
+    
+                // 此前列表的错误只写进日志（见下方 LaunchedEffect），用户在界面上完全看不到：
+                // 同步失败时列表就是旧数据或空的，没有任何解释。现在在列表顶部直接展示，
+                // 下次加载成功后 MemosViewModel 会把 errorMessage 置空，它自然消失。
                 viewModel.errorMessage?.let { message ->
-                    item(key = "error", span = { GridItemSpan(maxLineSpan) }) {
+                    item(key = "error") {
                         Text(
                             text = message,
                             color = MaterialTheme.colorScheme.error,
@@ -278,8 +243,11 @@ fun MemosList(
                         )
                     }
                 }
+    
                 if (sortedMemos.isEmpty()) {
-                    item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
+                    item(key = "empty") {
+                        // 空列表有三种完全不同的成因，此前一律显示「No memos found」：
+                        // 用户搜了三个字却看到「没有备忘」，会以为自己把备忘弄丢了。
                         val message = when {
                             !searchString.isNullOrEmpty() ->
                                 stringResource(R.string.no_search_results, searchString)
@@ -289,14 +257,8 @@ fun MemosList(
                         Text(message, modifier = Modifier.padding(24.dp))
                     }
                 }
-                items(count = sortedMemos.size, key = { sortedMemos[it].identifier }) { index ->
-                    val memo = sortedMemos[index]
-                    // 卡片高度固定 = 头部 + 两行文字 + 两行缩略图，与内容多少无关，
-                    // 网格因此在视觉上是整齐的。缩略图是正方形，边长由格子宽度决定，
-                    // 所以高度要按实际宽度算（BoxWithConstraints）。
-                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                        val thumb = (maxWidth - GridCardPadding) / GRID_THUMB_COLUMNS
-                        MemosCard(
+                items(sortedMemos, key = { it.identifier }) { memo ->
+                    MemosCard(
                         memo = memo,
                         onClick = { selectedMemo ->
                             if (onMemoClick != null) {
@@ -306,24 +268,103 @@ fun MemosList(
                             )
                         },
                         editGesture = editGesture ?: MemoEditGesture.NONE,
+                        previewMode = true,
                         showSyncStatus = currentAccount !is Account.Local,
-                        // 多列时收紧卡片间距：大卡片那种 15dp 并排起来会变成一道大沟。
-                        dense = true,
-                        gridCardHeight = GridCardHeaderHeight + GridCardTextHeight + thumb * GRID_THUMB_ROWS,
                         selectionMode = selection?.isSelecting == true,
                         selected = selection?.selected?.contains(memo.identifier) == true,
                         onToggleSelection = {
-                            // 长按：先进入多选，再选中这一条
-                            selection?.start()
-                            selection?.toggle(memo.identifier)
-                        },
+                                // 长按：先进入多选，再选中这一条
+                                selection?.start()
+                                selection?.toggle(memo.identifier)
+                            },
                         onTagClick = onTagClick
-                        )
+                    )
+                }
+            }
+    
+            ExploreLayout.TWO_COLUMN, ExploreLayout.THREE_COLUMN -> {
+                // 网格里两种档位都用同一套固定尺寸卡片（见 CompactGridBody）：
+                // 两行文字 + 3 列 × 2 行缩略图，超出封顶。
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(layout.columns),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .consumeWindowInsets(contentPadding),
+                    state = gridState,
+                    contentPadding = listContentPadding
+                ) {
+                    // 非卡片行都要占满整行，否则会被挤进一个格子里。
+                    if (header != null) {
+                        item(key = "header", span = { GridItemSpan(maxLineSpan) }) { header() }
+                    }
+                    viewModel.errorMessage?.let { message ->
+                        item(key = "error", span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                text = message,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                            )
+                        }
+                    }
+                    if (sortedMemos.isEmpty()) {
+                        item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
+                            val message = when {
+                                !searchString.isNullOrEmpty() ->
+                                    stringResource(R.string.no_search_results, searchString)
+                                tag != null -> stringResource(R.string.no_memos_with_tag)
+                                else -> stringResource(R.string.no_memos)
+                            }
+                            Text(message, modifier = Modifier.padding(24.dp))
+                        }
+                    }
+                    items(count = sortedMemos.size, key = { sortedMemos[it].identifier }) { index ->
+                        val memo = sortedMemos[index]
+                        // 卡片高度固定 = 头部 + 两行文字 + 两行缩略图，与内容多少无关，
+                        // 网格因此在视觉上是整齐的。缩略图是正方形，边长由格子宽度决定，
+                        // 所以高度要按实际宽度算（BoxWithConstraints）。
+                        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                            val thumb = (maxWidth - GridCardPadding) / GRID_THUMB_COLUMNS
+                            MemosCard(
+                            memo = memo,
+                            onClick = { selectedMemo ->
+                                if (onMemoClick != null) {
+                                    onMemoClick(selectedMemo.identifier)
+                                } else navController.navigate(
+                                    "${RouteName.MEMO_DETAIL}?memoId=${Uri.encode(selectedMemo.identifier)}"
+                                )
+                            },
+                            editGesture = editGesture ?: MemoEditGesture.NONE,
+                            showSyncStatus = currentAccount !is Account.Local,
+                            // 多列时收紧卡片间距：大卡片那种 15dp 并排起来会变成一道大沟。
+                            dense = true,
+                            gridCardHeight = GridCardHeaderHeight + GridCardTextHeight + thumb * GRID_THUMB_ROWS,
+                            selectionMode = selection?.isSelecting == true,
+                            selected = selection?.selected?.contains(memo.identifier) == true,
+                            onToggleSelection = {
+                                // 长按：先进入多选，再选中这一条
+                                selection?.start()
+                                selection?.toggle(memo.identifier)
+                            },
+                            onTagClick = onTagClick
+                            )
+                        }
                     }
                 }
             }
+            }
         }
-        }
+
+        ScrollTraceOverlay(
+            // 锚点当前的真实值，独立于事件流水显示：万一某次写锚点没打日志，
+            // 这一行仍然是事实。
+            anchorText = viewModel.scrollAnchor?.let {
+                "${it.identifier.take(6)} off=${it.offset} ${it.layout.name}"
+            } ?: "无",
+            revision = viewModel.listRevision,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(4.dp)
+        )
     }
 
     LaunchedEffect(viewModel.errorMessage) {
@@ -334,6 +375,7 @@ fun MemosList(
     }
 
     LaunchedEffect(Unit) {
+        ScrollTrace.record("#$traceId loadMemos() 开始")
         viewModel.loadMemos()
     }
 
@@ -344,7 +386,13 @@ fun MemosList(
     // 列表头随之改变）。数据变化——同步来了新备忘、排序方式换了——都不该把人
     // 拽回顶部。
     LaunchedEffect(layout) {
+        ScrollTrace.record("#$traceId 布局副作用 -> scrollTo(0)")
         if (layout == ExploreLayout.LARGE) lazyListState.scrollToItem(0) else gridState.scrollToItem(0)
+        ScrollTrace.record(
+            "#$traceId 布局副作用 执行完 " +
+                "fv=${lazyListState.firstVisibleItemIndex}:${lazyListState.firstVisibleItemScrollOffset} " +
+                "gfv=${gridState.firstVisibleItemIndex}:${gridState.firstVisibleItemScrollOffset}"
+        )
     }
 
     // 恢复滚动位置。
@@ -362,6 +410,37 @@ fun MemosList(
 val latestLayout by rememberUpdatedState(layout)
 val latestMemos by rememberUpdatedState(sortedMemos)
 
+    // ---- 诊断：位置变化流水（临时）----
+    //
+    // key 只有 traceId：**不随 listRevision / layout 重启**，所以它记录的是这一次组合
+    // 存续期间发生的每一次位置变化，按时间先后排下来。
+    //
+    // 这是整套诊断里最有价值的一行。它把两种完全不同的故障分得很开：
+    //   - 只看到 POS 0:0，压根没有 RESTORE 行   → 恢复那一步根本没被触发或被跳过；
+    //   - 看到 RESTORE 已滚动，随后又冒出 POS 0:0 → 恢复成功了，是别的东西随后把它冲掉。
+    // beta.10~14 就是在「到底是哪一种」上反复猜错的。
+    LaunchedEffect(traceId) {
+        // 只在**首个可见项变了**的时候记一行。滚动过程中 offset 每帧都在动，
+        // 逐帧写会一边刷屏一边让浮层每帧重组，既看不清也扰动了要测的时序。
+        var lastTracedIndex = Int.MIN_VALUE
+        snapshotFlow {
+            if (latestLayout == ExploreLayout.LARGE) {
+                lazyListState.firstVisibleItemIndex to lazyListState.firstVisibleItemScrollOffset
+            } else {
+                gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
+            }
+        }.collect { (index, offset) ->
+            if (index == lastTracedIndex) return@collect
+            lastTracedIndex = index
+            ScrollTrace.record("#$traceId POS $index:$offset")
+        }
+    }
+
+    // 诊断：列表内容版本号变化。同步改动列表前后各会看到一行。
+    LaunchedEffect(viewModel.listRevision) {
+        ScrollTrace.record("#$traceId REV=${viewModel.listRevision} n=${latestMemos.size}")
+    }
+
     // 恢复滚动位置。
     //
     // key 用 listRevision，**不是**列表内容。列表内容作 key 是按 equals 比较的，而同步
@@ -378,23 +457,67 @@ val latestMemos by rememberUpdatedState(sortedMemos)
     // 两个分支分开写：LazyListState 和 LazyGridState 若放进同一个 if/else 赋值，
     // 会被推断成共同父类 ScrollableState，而那上面没有 scrollToItem。
     LaunchedEffect(viewModel.listRevision, layout) {
-        val anchor = viewModel.scrollAnchor ?: return@LaunchedEffect
-        if (anchor.layout != layout) return@LaunchedEffect
+        val anchor = viewModel.scrollAnchor
+        if (anchor == null) {
+            ScrollTrace.record("#$traceId 恢复 跳过:没有锚点")
+            return@LaunchedEffect
+        }
+        if (anchor.layout != layout) {
+            ScrollTrace.record("#$traceId 恢复[$tracePage] 跳过:布局不符 ${anchor.layout.name}->${layout.name}")
+            return@LaunchedEffect
+        }
         val target = latestMemos.indexOfFirst { it.identifier == anchor.identifier }
-        if (target < 0) return@LaunchedEffect
-        if (target == 0 && anchor.offset == 0) return@LaunchedEffect
+        if (target < 0) {
+            ScrollTrace.record(
+                "#$traceId 恢复[$tracePage] 跳过:锚点不在当前列表 " +
+                    "id=${anchor.identifier.take(6)} n=${latestMemos.size}"
+            )
+            return@LaunchedEffect
+        }
+        if (target == 0 && anchor.offset == 0) {
+            ScrollTrace.record("#$traceId 恢复 跳过:锚点本身就是顶部")
+            return@LaunchedEffect
+        }
         if (layout == ExploreLayout.LARGE) {
             val atTop = lazyListState.firstVisibleItemIndex == 0 &&
                 lazyListState.firstVisibleItemScrollOffset == 0
-            if (!atTop) return@LaunchedEffect
+            if (!atTop) {
+                ScrollTrace.record(
+                    "#$traceId 恢复[$tracePage] 跳过:当前不在顶部 " +
+                        "fv=${lazyListState.firstVisibleItemIndex}:${lazyListState.firstVisibleItemScrollOffset}"
+                )
+                return@LaunchedEffect
+            }
+            ScrollTrace.record(
+                "#$traceId 恢复[$tracePage] 等布局 id=${anchor.identifier.take(6)} " +
+                    "target=$target off=${anchor.offset}"
+            )
             snapshotFlow { lazyListState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
             lazyListState.scrollToItem(target, anchor.offset)
+            ScrollTrace.record(
+                "#$traceId 恢复[$tracePage] 已滚到 " +
+                    "fv=${lazyListState.firstVisibleItemIndex}:${lazyListState.firstVisibleItemScrollOffset}"
+            )
         } else {
             val atTop = gridState.firstVisibleItemIndex == 0 &&
                 gridState.firstVisibleItemScrollOffset == 0
-            if (!atTop) return@LaunchedEffect
+            if (!atTop) {
+                ScrollTrace.record(
+                    "#$traceId 恢复[$tracePage] 跳过:当前不在顶部 " +
+                        "gfv=${gridState.firstVisibleItemIndex}:${gridState.firstVisibleItemScrollOffset}"
+                )
+                return@LaunchedEffect
+            }
+            ScrollTrace.record(
+                "#$traceId 恢复[$tracePage] 等布局 id=${anchor.identifier.take(6)} " +
+                    "target=$target off=${anchor.offset}"
+            )
             snapshotFlow { gridState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
             gridState.scrollToItem(target, anchor.offset)
+            ScrollTrace.record(
+                "#$traceId 恢复[$tracePage] 已滚到 " +
+                    "gfv=${gridState.firstVisibleItemIndex}:${gridState.firstVisibleItemScrollOffset}"
+            )
         }
     }
 
@@ -408,6 +531,7 @@ val latestMemos by rememberUpdatedState(sortedMemos)
     // 跳过它并不会漏记什么：列表重置一定落在 (0, 0)，规则恰好只排除了假值。
     // 真正"用户自己滚到了顶部"的情况由下面的 onDispose 记录，那里是无条件写的。
     LaunchedEffect(lazyListState, gridState, viewModel.listRevision, layout) {
+        var lastTracedIndex = Int.MIN_VALUE
         snapshotFlow {
             if (layout == ExploreLayout.LARGE) {
                 lazyListState.firstVisibleItemIndex to lazyListState.firstVisibleItemScrollOffset
@@ -415,8 +539,21 @@ val latestMemos by rememberUpdatedState(sortedMemos)
                 gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
             }
         }.collect { (index, offset) ->
-            if (index == 0 && offset == 0) return@collect
-            latestMemos.getOrNull(index)?.let { memo ->
+            // 注意：saveScrollAnchor 的调用时机和次数**保持原样**，这里只是多了诊断输出，
+            // 且只在首个可见项变化时输出，避免逐帧刷屏。
+            val indexChanged = index != lastTracedIndex
+            lastTracedIndex = index
+            if (index == 0 && offset == 0) {
+                if (indexChanged) ScrollTrace.record("#$traceId 记锚点 跳过 0:0")
+                return@collect
+            }
+            val memo = latestMemos.getOrNull(index)
+            if (memo == null) {
+                if (indexChanged) ScrollTrace.record("#$traceId 记锚点 越界 index=$index n=${latestMemos.size}")
+            } else {
+                if (indexChanged) {
+                    ScrollTrace.record("#$traceId 记锚点[$tracePage] ${memo.identifier.take(6)} off=$offset")
+                }
                 viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, layout))
             }
         }
@@ -436,8 +573,12 @@ val latestMemos by rememberUpdatedState(sortedMemos)
                 offset = gridState.firstVisibleItemScrollOffset
             }
             latestMemos.getOrNull(index)?.let { memo ->
+                ScrollTrace.record(
+                    "#$traceId 离开[$tracePage] 记锚点 ${memo.identifier.take(6)} " +
+                        "off=$offset lay=${latestLayout.name} index=$index"
+                )
                 viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, latestLayout))
-            }
+            } ?: ScrollTrace.record("#$traceId 离开 越界 index=$index n=${latestMemos.size}")
         }
     }
 
@@ -503,6 +644,16 @@ val latestMemos by rememberUpdatedState(sortedMemos)
             )
         }
     }
+}
+
+/**
+ * 诊断用：把当前列表的身份压成一小段，灵感 / 标签 / 搜索三页在浮层上一眼能分开。
+ * 定位完成后连同 [ScrollTrace] 一起删除。
+ */
+private fun tracePageLabel(tag: String?, searchString: String?): String = when {
+    tag != null -> "tag=$tag"
+    searchString != null -> "q=$searchString"
+    else -> "memos"
 }
 
 // ---- 网格卡片尺寸 ----
