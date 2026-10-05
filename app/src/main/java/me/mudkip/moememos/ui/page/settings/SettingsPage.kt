@@ -60,6 +60,7 @@ import me.mudkip.moememos.data.model.updateCurrentUserSettings
 import me.mudkip.moememos.data.mtls.MtlsManager
 import me.mudkip.moememos.ext.popBackStackIfLifecycleIsResumed
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.ext.settingsState
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.component.MemosIcon
 import me.mudkip.moememos.ui.page.common.RouteName
@@ -81,7 +82,7 @@ fun SettingsPage(
     val scope = rememberCoroutineScope()
     val accounts by userStateViewModel.accounts.collectAsStateWithLifecycle()
     val currentAccount by userStateViewModel.currentAccount.collectAsStateWithLifecycle()
-    val settings by context.settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())
+    val settings = context.settingsState()
     val appLockSupported = remember(context, AppLockSession.foregroundGeneration) {
         AppLockAuthenticator.canAuthenticate(context)
     }

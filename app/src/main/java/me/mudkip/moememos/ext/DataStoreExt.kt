@@ -1,11 +1,14 @@
 package me.mudkip.moememos.ext
 
 import android.content.Context
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.dataStore
 import androidx.datastore.dataStoreFile
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.mudkip.moememos.MoeMemosApp
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.util.SettingsSerializer
@@ -14,6 +17,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 注意：文件名里的 "v3" 是历史遗留（早年手工加的版本后缀），与
@@ -28,6 +32,43 @@ val Context.settingsDataStore: DataStore<Settings> by dataStore(
 )
 
 private const val SETTINGS_FILE_NAME = "settings_v3.json"
+
+/**
+ * 进程内最后一次**真正从 DataStore 读到**的设置。
+ *
+ * DataStore 的第一次发射是异步的，而各处此前都拿 `Settings()`（编造出来的默认值）当
+ * `collectAsStateWithLifecycle` 的 `initialValue`。于是每次列表页重新进入组合
+ * （打开备忘返回、切回标签页、面板被重建），**第一帧**都会按默认排序（创建时间）和
+ * 默认布局（大卡片）渲染，随后才被真实设置改回去。
+ *
+ * 这一帧足以把整个列表顺序换掉，也足以让 `layout` 看起来"被切换过"。
+ * beta.16 的真机埋点把它拍了下来——同一个源列表、同一个 rev：
+ *
+ *     SORT 重算 rev=1 src=136599319 srcN=73 mode=CREATED dir=DESCENDING
+ *     SORT 重算 rev=1 src=136599319 srcN=73 mode=TITLE    dir=DESCENDING
+ *
+ * 前者是那一帧的谎，后者才是用户的真实设置。用户看到的"返回后随机跳到一个地方"
+ * （列表按错的顺序渲染了一帧）和"跳回顶部"（布局被误判为切换过）都是它的后果。
+ *
+ * 拿上一次的真实值当初始值，新建的收集者第一帧就是对的；只有冷启动的第一次才会
+ * 落到默认值，而那时本来也没有滚动位置需要保住。
+ */
+private val latestKnownSettings = AtomicReference<Settings?>(null)
+
+/**
+ * 读设置。UI 一律用它，不要再直接写
+ * `settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())`
+ * ——那等于每次重新收集都先撒一帧谎，而列表恰好对那一帧非常敏感。
+ */
+@Composable
+fun Context.settingsState(): Settings {
+    val settings by settingsDataStore.data.collectAsStateWithLifecycle(
+        initialValue = latestKnownSettings.get() ?: Settings()
+    )
+    // 给下一次收集用（可能是另一个页面，也可能是组合被重建后的自己）。
+    latestKnownSettings.set(settings)
+    return settings
+}
 
 /**
  * 文件损坏时 DataStore 会用这里返回的默认值覆盖它。覆盖**之前**先把原始字节另存一份，

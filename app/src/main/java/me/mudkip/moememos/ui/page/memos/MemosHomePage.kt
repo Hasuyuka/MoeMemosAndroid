@@ -34,6 +34,7 @@ import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.Settings
 import me.mudkip.moememos.data.model.updateCurrentUserSettings
 import me.mudkip.moememos.ext.settingsDataStore
+import me.mudkip.moememos.ext.settingsState
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.component.DeleteSelectedDialog
 import me.mudkip.moememos.ui.component.MemoSortButton
@@ -76,7 +77,7 @@ private fun MemosHomePageContent(
     val currentAccount by userStateViewModel.currentAccount.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // 顶栏那个布局按钮切换的就是它；「发现」页读的是同一份设置，两个页面保持一致。
-    val settings by context.settingsDataStore.data.collectAsStateWithLifecycle(initialValue = Settings())
+    val settings = context.settingsState()
     val syncStatus by memosViewModel.syncStatus.collectAsStateWithLifecycle()
 
     val expandedFab by remember {
