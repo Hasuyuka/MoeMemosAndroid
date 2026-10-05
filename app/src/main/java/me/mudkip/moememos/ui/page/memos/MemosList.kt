@@ -357,11 +357,6 @@ fun MemosList(
     // 两个分支分开写：LazyListState 和 LazyGridState 若放进同一个 if/else 赋值，
     // 会被推断成共同父类 ScrollableState，而那上面没有 scrollToItem。
     // 本次进入列表后，锚点是否已经处理完。
-    //
-    // 返回列表的第一帧，滚动状态是 0——那是还没恢复的默认值，不是用户的位置。
-    // 在锚点处理完之前，它不许覆盖记录下来的位置（上一版的 bug 就是这么丢的）。
-    var anchorResolved by remember { mutableStateOf(false) }
-
     // 恢复滚动位置。
     //
     // 判据是"当前停在顶部、但记着的位置不是顶部"——只有状态真的被重置过才动手，
@@ -375,35 +370,36 @@ fun MemosList(
     // 两个分支分开写：LazyListState 和 LazyGridState 若放进同一个 if/else 赋值，
     // 会被推断成共同父类 ScrollableState，而那上面没有 scrollToItem。
     LaunchedEffect(sortedMemos, layout) {
-        try {
-            val anchor = viewModel.scrollAnchor ?: return@LaunchedEffect
-            if (anchor.layout != layout) return@LaunchedEffect
-            val target = sortedMemos.indexOfFirst { it.identifier == anchor.identifier }
-            if (target < 0) return@LaunchedEffect
-            if (target == 0 && anchor.offset == 0) return@LaunchedEffect
-            if (layout == ExploreLayout.LARGE) {
-                val atTop = lazyListState.firstVisibleItemIndex == 0 &&
-                    lazyListState.firstVisibleItemScrollOffset == 0
-                if (!atTop) return@LaunchedEffect
-                snapshotFlow { lazyListState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
-                lazyListState.scrollToItem(target, anchor.offset)
-            } else {
-                val atTop = gridState.firstVisibleItemIndex == 0 &&
-                    gridState.firstVisibleItemScrollOffset == 0
-                if (!atTop) return@LaunchedEffect
-                snapshotFlow { gridState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
-                gridState.scrollToItem(target, anchor.offset)
-            }
-        } finally {
-            // 无论走到哪个分支都算处理完：否则用户自己滚回顶部时，记录永远写不进去。
-            anchorResolved = true
+        val anchor = viewModel.scrollAnchor ?: return@LaunchedEffect
+        if (anchor.layout != layout) return@LaunchedEffect
+        val target = sortedMemos.indexOfFirst { it.identifier == anchor.identifier }
+        if (target < 0) return@LaunchedEffect
+        if (target == 0 && anchor.offset == 0) return@LaunchedEffect
+        if (layout == ExploreLayout.LARGE) {
+            val atTop = lazyListState.firstVisibleItemIndex == 0 &&
+                lazyListState.firstVisibleItemScrollOffset == 0
+            if (!atTop) return@LaunchedEffect
+            snapshotFlow { lazyListState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
+            lazyListState.scrollToItem(target, anchor.offset)
+        } else {
+            val atTop = gridState.firstVisibleItemIndex == 0 &&
+                gridState.firstVisibleItemScrollOffset == 0
+            if (!atTop) return@LaunchedEffect
+            snapshotFlow { gridState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
+            gridState.scrollToItem(target, anchor.offset)
         }
     }
 
     // 滚动时更新锚点。
     //
-    // 锚点处理完之前，"位置 = 0"一律不写——那是刚回到列表、还没恢复的状态，
-    // 不是用户离开时的位置。
+    // 「位置 = 0」一律不写，这一点不能放松。列表被重置时落点**恰好**就是 (0, 0)，
+    // 而这个协程会因为 sortedMemos 变化（返回后触发的那次同步）而重启，一重启就把
+    // 当前值读出来——那个假的 (0, 0) 于是覆盖掉真正的锚点，恢复那一步随后拿到
+    // "第一篇、偏移 0"、target = 0、直接放弃。beta.12 就是这么变成**稳定**跳顶部的，
+    // 比 beta.11（当时是无条件跳过 0）还差。
+    //
+    // 跳过它并不会漏记什么：列表重置一定落在 (0, 0)，所以这条规则恰好只排除了假值。
+    // 真正"用户自己滚到了顶部"的情况由下面的 onDispose 记录，那里是无条件写的。
     LaunchedEffect(lazyListState, gridState, sortedMemos, layout) {
         snapshotFlow {
             if (layout == ExploreLayout.LARGE) {
@@ -412,7 +408,7 @@ fun MemosList(
                 gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
             }
         }.collect { (index, offset) ->
-            if (index == 0 && offset == 0 && !anchorResolved) return@collect
+            if (index == 0 && offset == 0) return@collect
             val memo = sortedMemos.getOrNull(index) ?: return@collect
             viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, layout))
         }
