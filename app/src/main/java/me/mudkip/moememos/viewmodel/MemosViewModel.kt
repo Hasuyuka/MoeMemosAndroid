@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -86,7 +87,18 @@ class MemosViewModel @Inject constructor(
         private set
 
     /**
-     * 列表滚动锚点：离开列表时第一条可见备忘的 id、它的像素偏移，以及当时的布局。
+     * 列表滚动锚点，**按「页面 + 布局」分别存**。
+     *
+     * 原来只有一个字段，三件事挤在一起、互相踩：
+     *
+     *  1. 灵感 / 标签 / 搜索三页共用同一个锚点，A 页离开时写的值会被 B 页拿去定位；
+     *  2. 大卡片和网格也共用同一个锚点，而两者的位置单位没有可比性，于是恢复那一步
+     *     只能靠比对 `layout` 字段来"拒绝执行"——一旦拒绝，人就停在顶部；
+     *  3. 因此只要切过一次布局，恢复必然失败，而"回顶"那个副作用照样执行。
+     *
+     * beta.15 的真机埋点把第 2、3 条钉死了（`恢复 跳过:布局不符 TWO_COLUMN->LARGE`
+     * 之后紧跟 `POS 0:0`）。key 里带上页面和布局之后，每个组合各有各的锚点，
+     * 切换布局就是恢复该布局自己的位置，而不是"作废 + 回顶"。
      *
      * 记 id 而不是 index——列表增删会让 index 漂移，隔一天回来同一个 index
      * 早就不是同一篇了。
@@ -95,11 +107,36 @@ class MemosViewModel @Inject constructor(
      * 重新组合，实测滚动位置会丢（用户反馈"点开一篇再返回就跳回最上面"），
      * ViewModel 在导航往返之间不会重建，才有可靠的落点。
      */
-    var scrollAnchor: MemoScrollAnchor? by mutableStateOf(null)
-        private set
+    private val scrollAnchors = mutableStateMapOf<String, MemoScrollAnchor>()
 
-    fun saveScrollAnchor(anchor: MemoScrollAnchor?) {
-        scrollAnchor = anchor
+    fun scrollAnchor(key: String): MemoScrollAnchor? = scrollAnchors[key]
+
+    fun saveScrollAnchor(key: String, anchor: MemoScrollAnchor?) {
+        if (anchor == null) {
+            scrollAnchors.remove(key)
+        } else {
+            scrollAnchors[key] = anchor
+        }
+    }
+
+    /**
+     * 上一次真正用过的列表布局，按页面分开记。
+     *
+     * "切换布局时回到顶部"必须靠它来判断——不能靠 `LaunchedEffect(layout)`：
+     * 那个 key 只管同一次组合内的重启，列表页每次被重新组合它都会执行一次，
+     * 于是每次返回列表都白滚一次顶部（beta.15 埋点已证实）。
+     *
+     * 放在 ViewModel 里，这个"上一次"才能跨组合存活；否则新组合一开始就又是 null，
+     * 又会回顶一次，等于没修。按页面分开则是因为布局设置是全局的：在标签页换了布局，
+     * 不该让灵感页跟着回顶一次。
+     */
+    private val lastSeenLayouts = mutableStateMapOf<String, ExploreLayout>()
+
+    /** @return true 表示"这个页面的布局真的换了"，此时才该回顶。 */
+    fun consumeLayoutChange(page: String, layout: ExploreLayout): Boolean {
+        val previous = lastSeenLayouts[page]
+        lastSeenLayouts[page] = layout
+        return previous != null && previous != layout
     }
 
     /**

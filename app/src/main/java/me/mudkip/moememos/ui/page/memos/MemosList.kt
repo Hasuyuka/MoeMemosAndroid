@@ -103,6 +103,9 @@ fun MemosList(
     // 三页共用且里面不记来源页——「记锚点」与「恢复」两行的这个标签若对不上，
     // 就是拿 A 页的锚点去定位 B 页的列表，落点自然看着是随机的。
     val tracePage = tracePageLabel(tag, searchString)
+    // 锚点按「页面 + 布局」分桶。key 一分，三页之间、大卡片与网格之间就不会再互相
+    // 覆盖；布局切换也从"锚点作废 → 停在顶部"变成"恢复该布局自己上次的位置"。
+    val anchorKey = "$tracePage|${layout.name}"
     // 网格模式有自己独立的滚动状态（大卡片模式仍然用传进来的 lazyListState）。
     val gridState = rememberLazyGridState()
     val userStateViewModel = LocalUserState.current
@@ -182,6 +185,7 @@ fun MemosList(
         ScrollTrace.record(
             "#$traceId ENTER $tracePage/${layout.name} " +
                 "n=${sortedMemos.size} rev=${viewModel.listRevision} " +
+                "lst=${System.identityHashCode(lazyListState)} gst=${System.identityHashCode(gridState)} " +
                 "fv=${lazyListState.firstVisibleItemIndex}:${lazyListState.firstVisibleItemScrollOffset}"
         )
         onDispose {
@@ -357,13 +361,23 @@ fun MemosList(
         ScrollTraceOverlay(
             // 锚点当前的真实值，独立于事件流水显示：万一某次写锚点没打日志，
             // 这一行仍然是事实。
-            anchorText = viewModel.scrollAnchor?.let {
+            anchorText = viewModel.scrollAnchor(anchorKey)?.let {
                 "${it.identifier.take(6)} off=${it.offset} ${it.layout.name}"
             } ?: "无",
             revision = viewModel.listRevision,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(4.dp)
+                // 关键：加上 contentPadding.top。
+                //
+                // 原来只写了 .padding(4.dp)，浮层就贴在内容区最顶上；而顶栏是画在内容
+                // **之上**的，于是每张截图的最前面 2 行（黄色状态行和 ENTER）都被顶栏
+                // 吃掉。beta.15 的两张截图都是这样，用像素剖面量的：绿色事件行按 78px
+                // 等距排列，第一行在 y=365，而顶栏背景一直铺到 y≈332——被吞掉的正是
+                // 那两行，其中 ENTER 恰恰是判断"组合有没有被重建"的关键。
+                .padding(
+                    start = 6.dp,
+                    top = contentPadding.calculateTopPadding() + 6.dp,
+                )
         )
     }
 
@@ -386,7 +400,20 @@ fun MemosList(
     // 列表头随之改变）。数据变化——同步来了新备忘、排序方式换了——都不该把人
     // 拽回顶部。
     LaunchedEffect(layout) {
-        ScrollTrace.record("#$traceId 布局副作用 -> scrollTo(0)")
+        // 只有"这个页面的布局真的换了"才回顶。
+        //
+        // 原实现是 `LaunchedEffect(layout) { scrollToItem(0) }`，注释写的是"只在切换布局时
+        // 回顶"——但 LaunchedEffect 的 key 只控制**同一次组合内**的重启：列表页每次被重新
+        // 组合（打开备忘返回、切页回来），它都会无条件跑一次 scrollToItem(0)。
+        // beta.15 的真机埋点把这一点证死了：全新组合 #47 的第 2 个事件就是它。
+        if (!viewModel.consumeLayoutChange(tracePage, layout)) {
+            ScrollTrace.record("#$traceId 布局副作用 跳过(布局没换 now=${layout.name})")
+            return@LaunchedEffect
+        }
+        ScrollTrace.record("#$traceId 布局副作用 -> scrollTo(0) 并清锚点")
+        // 这个布局既然被重置回顶部，它旧的锚点就必须一起清掉——否则紧接着启动的
+        // 恢复副作用会照旧读到那个锚点，把刚滚到的顶部又拉回去，两个副作用互相打架。
+        viewModel.saveScrollAnchor(anchorKey, null)
         if (layout == ExploreLayout.LARGE) lazyListState.scrollToItem(0) else gridState.scrollToItem(0)
         ScrollTrace.record(
             "#$traceId 布局副作用 执行完 " +
@@ -441,6 +468,26 @@ val latestMemos by rememberUpdatedState(sortedMemos)
         ScrollTrace.record("#$traceId REV=${viewModel.listRevision} n=${latestMemos.size}")
     }
 
+    // 诊断：`sortedMemos` 的**重算**。key 与真正的 remember 完全一致——所以只要有这一行，
+    // 就说明列表被重新过滤/排序了，哪怕 `listRevision` 没变。
+    //
+    // beta.15 里出现过「首个可见项 index 从 66 变成 22，而锚点 id 和偏移都没变」的现象：
+    // 那只能是列表内容被重排，可当时**没有任何 REV 行**。这一行就是为了补上那个盲区。
+    LaunchedEffect(
+        sourceMemos,
+        viewModel.listRevision,
+        tag,
+        searchString,
+        currentSortMode,
+        currentSortDirection,
+    ) {
+        ScrollTrace.record(
+            "#$traceId SORT 重算 rev=${viewModel.listRevision} " +
+                "src=${System.identityHashCode(sourceMemos)} srcN=${sourceMemos.size} " +
+                "mode=$currentSortMode dir=$currentSortDirection"
+        )
+    }
+
     // 恢复滚动位置。
     //
     // key 用 listRevision，**不是**列表内容。列表内容作 key 是按 equals 比较的，而同步
@@ -457,19 +504,19 @@ val latestMemos by rememberUpdatedState(sortedMemos)
     // 两个分支分开写：LazyListState 和 LazyGridState 若放进同一个 if/else 赋值，
     // 会被推断成共同父类 ScrollableState，而那上面没有 scrollToItem。
     LaunchedEffect(viewModel.listRevision, layout) {
-        val anchor = viewModel.scrollAnchor
+        val anchor = viewModel.scrollAnchor(anchorKey)
         if (anchor == null) {
             ScrollTrace.record("#$traceId 恢复 跳过:没有锚点")
             return@LaunchedEffect
         }
         if (anchor.layout != layout) {
-            ScrollTrace.record("#$traceId 恢复[$tracePage] 跳过:布局不符 ${anchor.layout.name}->${layout.name}")
+            ScrollTrace.record("#$traceId 恢复[$anchorKey] 跳过:布局不符 ${anchor.layout.name}->${layout.name}")
             return@LaunchedEffect
         }
         val target = latestMemos.indexOfFirst { it.identifier == anchor.identifier }
         if (target < 0) {
             ScrollTrace.record(
-                "#$traceId 恢复[$tracePage] 跳过:锚点不在当前列表 " +
+                "#$traceId 恢复[$anchorKey] 跳过:锚点不在当前列表 " +
                     "id=${anchor.identifier.take(6)} n=${latestMemos.size}"
             )
             return@LaunchedEffect
@@ -483,19 +530,19 @@ val latestMemos by rememberUpdatedState(sortedMemos)
                 lazyListState.firstVisibleItemScrollOffset == 0
             if (!atTop) {
                 ScrollTrace.record(
-                    "#$traceId 恢复[$tracePage] 跳过:当前不在顶部 " +
+                    "#$traceId 恢复[$anchorKey] 跳过:当前不在顶部 " +
                         "fv=${lazyListState.firstVisibleItemIndex}:${lazyListState.firstVisibleItemScrollOffset}"
                 )
                 return@LaunchedEffect
             }
             ScrollTrace.record(
-                "#$traceId 恢复[$tracePage] 等布局 id=${anchor.identifier.take(6)} " +
+                "#$traceId 恢复[$anchorKey] 等布局 id=${anchor.identifier.take(6)} " +
                     "target=$target off=${anchor.offset}"
             )
             snapshotFlow { lazyListState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
             lazyListState.scrollToItem(target, anchor.offset)
             ScrollTrace.record(
-                "#$traceId 恢复[$tracePage] 已滚到 " +
+                "#$traceId 恢复[$anchorKey] 已滚到 " +
                     "fv=${lazyListState.firstVisibleItemIndex}:${lazyListState.firstVisibleItemScrollOffset}"
             )
         } else {
@@ -503,19 +550,19 @@ val latestMemos by rememberUpdatedState(sortedMemos)
                 gridState.firstVisibleItemScrollOffset == 0
             if (!atTop) {
                 ScrollTrace.record(
-                    "#$traceId 恢复[$tracePage] 跳过:当前不在顶部 " +
+                    "#$traceId 恢复[$anchorKey] 跳过:当前不在顶部 " +
                         "gfv=${gridState.firstVisibleItemIndex}:${gridState.firstVisibleItemScrollOffset}"
                 )
                 return@LaunchedEffect
             }
             ScrollTrace.record(
-                "#$traceId 恢复[$tracePage] 等布局 id=${anchor.identifier.take(6)} " +
+                "#$traceId 恢复[$anchorKey] 等布局 id=${anchor.identifier.take(6)} " +
                     "target=$target off=${anchor.offset}"
             )
             snapshotFlow { gridState.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
             gridState.scrollToItem(target, anchor.offset)
             ScrollTrace.record(
-                "#$traceId 恢复[$tracePage] 已滚到 " +
+                "#$traceId 恢复[$anchorKey] 已滚到 " +
                     "gfv=${gridState.firstVisibleItemIndex}:${gridState.firstVisibleItemScrollOffset}"
             )
         }
@@ -531,7 +578,14 @@ val latestMemos by rememberUpdatedState(sortedMemos)
     // 跳过它并不会漏记什么：列表重置一定落在 (0, 0)，规则恰好只排除了假值。
     // 真正"用户自己滚到了顶部"的情况由下面的 onDispose 记录，那里是无条件写的。
     LaunchedEffect(lazyListState, gridState, viewModel.listRevision, layout) {
+        // 诊断：这个协程的每次启动都记一行。它重启 = 某个 key 变了（listRevision / layout /
+        // 或者滚动状态对象换了身份）。beta.15 里出现过"记锚点行重复但 REV 没出现"的矛盾，
+        // 这一行就是为了确定到底是哪个 key 变的。
         var lastTracedIndex = Int.MIN_VALUE
+        ScrollTrace.record(
+            "#$traceId 记锚点协程 启动 rev=${viewModel.listRevision} layout=${layout.name} " +
+                "lst=${System.identityHashCode(lazyListState)} gst=${System.identityHashCode(gridState)}"
+        )
         snapshotFlow {
             if (layout == ExploreLayout.LARGE) {
                 lazyListState.firstVisibleItemIndex to lazyListState.firstVisibleItemScrollOffset
@@ -554,7 +608,7 @@ val latestMemos by rememberUpdatedState(sortedMemos)
                 if (indexChanged) {
                     ScrollTrace.record("#$traceId 记锚点[$tracePage] ${memo.identifier.take(6)} off=$offset")
                 }
-                viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, layout))
+                viewModel.saveScrollAnchor(anchorKey, MemoScrollAnchor(memo.identifier, offset, layout))
             }
         }
     }
@@ -573,12 +627,16 @@ val latestMemos by rememberUpdatedState(sortedMemos)
                 offset = gridState.firstVisibleItemScrollOffset
             }
             latestMemos.getOrNull(index)?.let { memo ->
+                val disposeKey = "$tracePage|${latestLayout.name}"
                 ScrollTrace.record(
-                    "#$traceId 离开[$tracePage] 记锚点 ${memo.identifier.take(6)} " +
-                        "off=$offset lay=${latestLayout.name} index=$index"
+                    "#$traceId 离开[$disposeKey] 记锚点 ${memo.identifier.take(6)} " +
+                        "off=$offset index=$index"
                 )
-                viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, latestLayout))
-            } ?: ScrollTrace.record("#$traceId 离开 越界 index=$index n=${latestMemos.size}")
+                viewModel.saveScrollAnchor(
+                    disposeKey,
+                    MemoScrollAnchor(memo.identifier, offset, latestLayout)
+                )
+            } ?: ScrollTrace.record("#$traceId 离开[$tracePage] 越界 index=$index n=${latestMemos.size}")
         }
     }
 
