@@ -357,22 +357,30 @@ fun MemosList(
     // 两个分支分开写：LazyListState 和 LazyGridState 若放进同一个 if/else 赋值，
     // 会被推断成共同父类 ScrollableState，而那上面没有 scrollToItem。
     // 本次进入列表后，锚点是否已经处理完。
+    // rememberUpdatedState 必须写在 DisposableEffect **外面**：它是 @Composable 函数，
+    // 而 effect 的块不是组合上下文，在里面调用编译不过。
+val latestLayout by rememberUpdatedState(layout)
+val latestMemos by rememberUpdatedState(sortedMemos)
+
     // 恢复滚动位置。
     //
-    // 判据是"当前停在顶部、但记着的位置不是顶部"——只有状态真的被重置过才动手，
-    // 正常浏览时不会打扰用户。key 里带着 sortedMemos：打开备忘再返回会触发一次同步，
-    // 同步过程中列表可能被清空再填回把位置冲掉，那次变化会让本副作用重新跑一遍，
-    // 于是又能把人放回去（用户反馈的"偶尔还是跳顶部"就是漏了这一手）。
+    // key 用 listRevision，**不是**列表内容。列表内容作 key 是按 equals 比较的，而同步
+    // 会把列表清空再填回——填回之后内容和之前**完全一样**，key 就相等了，副作用因此
+    // 不会重跑，可位置在那次清空里已经被冲掉，人就留在顶部。这正是用户反馈的"偶尔
+    // 会跳顶部"：取决于那次同步是否真的动过列表。
     //
-    // 滚动前要**等列表真的完成布局**：scrollToItem 作用在还没排版的列表上会被丢掉，
-    // 之后列表按 0 排版——这是"偶尔"的另一个来源。
+    // listRevision 每次列表内容真的变化都会 +1（包括中间那个清空状态），所以每一次
+    // 冲掉都会重新补一次恢复。顺带也省掉了"每次重组把整表比一遍相等"的开销。
+    //
+    // 判据是"当前停在顶部、但记着的位置不是顶部"——只有状态真的被重置过才动手。
+    // 滚动前还要**等列表真的完成布局**：scrollToItem 作用在没排版的列表上会被丢掉。
     //
     // 两个分支分开写：LazyListState 和 LazyGridState 若放进同一个 if/else 赋值，
     // 会被推断成共同父类 ScrollableState，而那上面没有 scrollToItem。
-    LaunchedEffect(sortedMemos, layout) {
+    LaunchedEffect(viewModel.listRevision, layout) {
         val anchor = viewModel.scrollAnchor ?: return@LaunchedEffect
         if (anchor.layout != layout) return@LaunchedEffect
-        val target = sortedMemos.indexOfFirst { it.identifier == anchor.identifier }
+        val target = latestMemos.indexOfFirst { it.identifier == anchor.identifier }
         if (target < 0) return@LaunchedEffect
         if (target == 0 && anchor.offset == 0) return@LaunchedEffect
         if (layout == ExploreLayout.LARGE) {
@@ -390,17 +398,16 @@ fun MemosList(
         }
     }
 
-    // 滚动时更新锚点。
+    // 滚动时更新锚点。key 同样用 listRevision。
     //
     // 「位置 = 0」一律不写，这一点不能放松。列表被重置时落点**恰好**就是 (0, 0)，
-    // 而这个协程会因为 sortedMemos 变化（返回后触发的那次同步）而重启，一重启就把
-    // 当前值读出来——那个假的 (0, 0) 于是覆盖掉真正的锚点，恢复那一步随后拿到
-    // "第一篇、偏移 0"、target = 0、直接放弃。beta.12 就是这么变成**稳定**跳顶部的，
-    // 比 beta.11（当时是无条件跳过 0）还差。
+    // 而这个协程会因为列表变化而重启，一重启就把当前值读出来——那个假的 (0, 0) 于是
+    // 覆盖掉真正的锚点，恢复那一步随后拿到"第一篇、偏移 0"、target = 0 直接放弃。
+    // beta.12 就是这么变成**稳定**跳顶部的，比当时无条件跳过 0 的 beta.11 还差。
     //
-    // 跳过它并不会漏记什么：列表重置一定落在 (0, 0)，所以这条规则恰好只排除了假值。
+    // 跳过它并不会漏记什么：列表重置一定落在 (0, 0)，规则恰好只排除了假值。
     // 真正"用户自己滚到了顶部"的情况由下面的 onDispose 记录，那里是无条件写的。
-    LaunchedEffect(lazyListState, gridState, sortedMemos, layout) {
+    LaunchedEffect(lazyListState, gridState, viewModel.listRevision, layout) {
         snapshotFlow {
             if (layout == ExploreLayout.LARGE) {
                 lazyListState.firstVisibleItemIndex to lazyListState.firstVisibleItemScrollOffset
@@ -409,15 +416,11 @@ fun MemosList(
             }
         }.collect { (index, offset) ->
             if (index == 0 && offset == 0) return@collect
-            val memo = sortedMemos.getOrNull(index) ?: return@collect
-            viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, layout))
+            latestMemos.getOrNull(index)?.let { memo ->
+                viewModel.saveScrollAnchor(MemoScrollAnchor(memo.identifier, offset, layout))
+            }
         }
     }
-
-    // rememberUpdatedState 必须写在 DisposableEffect **外面**：它是 @Composable 函数，
-// 而 effect 的块不是组合上下文，在里面调用编译不过。
-val latestLayout by rememberUpdatedState(layout)
-val latestMemos by rememberUpdatedState(sortedMemos)
 
     // 离开列表时无条件记一次：这里的值才是用户真正的"离开位置"，
     // 包括他自己滚回了顶部（上面那个副作用不会记录这种情况）。
