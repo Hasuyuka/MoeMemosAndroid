@@ -27,8 +27,8 @@ import java.util.concurrent.atomic.AtomicLong
  * 定位完成后把本文件和 MemosList 里所有 ScrollTrace.record 调用一并删掉。
  */
 object ScrollTrace {
-    /** 屏幕上最多保留多少行。截图能放下的行数是硬约束。 */
-    private const val MAX_EVENTS = 14
+    /** 屏幕上最多保留多少行。16 行 8sp 约占屏幕上部三分之一，一眼能看全。 */
+    private const val MAX_EVENTS = 16
 
     private val instanceCounter = AtomicLong(0)
 
