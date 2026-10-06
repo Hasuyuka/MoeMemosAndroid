@@ -14,7 +14,6 @@ import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.model.User
 import me.mudkip.moememos.util.extractCustomTags
-import me.mudkip.moememos.util.FileTrace
 import okhttp3.MediaType
 import java.time.Instant
 import java.util.UUID
@@ -103,19 +102,9 @@ class LocalDatabaseRepository(
                     it.copy(accountKey = accountKey, memoId = memo.identifier)
                 },
             )
-            val linked = memoDao.getMemoResources(memo.identifier, accountKey)
-            FileTrace.record(
-                "createMemo 建 ${memo.identifier.take(8)} 传入=${resources.size} 落库=${linked.size}"
-            )
-            if (linked.size != resources.size) {
-                // 落库数与传入数不一致，说明有关联没写进去。以前这里没有任何信号，
-                // 界面上只表现为"少了几张图"。记下来。
-                FileTrace.record("createMemo 关联数不符 传入=${resources.size} 落库=${linked.size}")
-            }
 
             ApiResponse.Success(withResources(memo))
         } catch (e: Exception) {
-            FileTrace.record("createMemo 异常 ${e.javaClass.simpleName}: ${e.message?.take(60)}")
             ApiResponse.Failure.Exception(e)
         }
     }
@@ -278,7 +267,6 @@ class LocalDatabaseRepository(
                 memoId = memoIdentifier
             )
             memoDao.insertResource(resource)
-            FileTrace.record("建附件 ${resource.identifier.take(8)} ${filename.takeLast(16)} memoId=${memoIdentifier?.take(8) ?: "null"}")
             ApiResponse.Success(resource)
         } catch (e: Exception) {
             ApiResponse.Failure.Exception(e)
@@ -310,7 +298,6 @@ class LocalDatabaseRepository(
         val local = resource.localUri ?: resource.uri
         val localUri = local.toUri()
         if (localUri.scheme == "file") {
-            FileTrace.record("删附件 ${resource.identifier.take(8)} ${resource.filename.takeLast(16)}")
             fileStorage.deleteFile(localUri)
         }
     }

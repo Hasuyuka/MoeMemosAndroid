@@ -48,7 +48,6 @@ import me.mudkip.moememos.ext.icon
 import me.mudkip.moememos.ext.popBackStackIfLifecycleIsResumed
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ext.titleResource
-import me.mudkip.moememos.ui.component.ImageDiagnosticsOverlay
 import me.mudkip.moememos.ui.component.MemoContent
 import me.mudkip.moememos.ui.component.MemosCardActionButton
 import me.mudkip.moememos.viewmodel.LocalMemos
@@ -126,12 +125,6 @@ internal fun MemoDetailContent(memoIdentifier: String, onBack: () -> Unit) {
                 )
                 .verticalScroll(rememberScrollState())
         ) {
-            // 诊断（临时）：逐条列出图片附件的文件状态与真实加载异常。
-            ImageDiagnosticsOverlay(
-                resources = memo.resources,
-                modifier = Modifier.padding(start = 6.dp, top = 6.dp)
-            )
-
             Row(
                 modifier = Modifier
                     .padding(start = 15.dp, top = 10.dp, end = 15.dp)
