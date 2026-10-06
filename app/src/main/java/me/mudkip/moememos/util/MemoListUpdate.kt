@@ -35,7 +35,17 @@ fun planMemoListUpdate(current: List<MemoEntity>, latest: List<MemoEntity>): Mem
 
     val merged = latest.map { incoming ->
         val existing = byIdentifier[incoming.identifier]
-        if (existing != null && existing == incoming) existing else incoming
+        // 除了 `==` 之外**必须单独比一次 resources**。
+        //
+        // MemoEntity 的 resources 是类体属性（`@Ignore`，不在构造函数里），data class
+        // 自动生成的 equals/hashCode 完全不看它。于是「附件被增删、其余字段没动」这种
+        // 改动在这里会被判定成"这一条没变"，从而保留旧对象——列表和详情页继续照着
+        // **旧的附件列表**渲染，指向已经被删掉的文件，界面上就是几个永远空白的格子。
+        // 用户看到的是「加了 4 张图只显示 1 张」，而数据库里其实早就只剩 1 条了。
+        val unchanged = existing != null &&
+            existing == incoming &&
+            existing.resources == incoming.resources
+        if (unchanged) existing else incoming
     }
 
     // 公共前缀里引用相同的那一段完全不用动

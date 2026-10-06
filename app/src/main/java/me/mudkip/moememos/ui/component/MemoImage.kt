@@ -2,16 +2,26 @@ package me.mudkip.moememos.ui.component
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BrokenImage
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import coil3.ImageLoader
@@ -41,6 +51,10 @@ fun MemoImage(
     animate: Boolean = false,
 ) {
     var diskCacheFile: File? by remember { mutableStateOf(null) }
+    // 加载失败必须**看得见**。之前失败时 AsyncImage 什么都不画，界面上就是一个空白格子，
+    // 和"还没加载完""这里本来就没图"完全分不出来——用户报的「加了 4 张图只显示 1 张」
+    // 就是靠这个空白才一直没被认出来是附件真的丢了。
+    var loadFailed by remember(url) { mutableStateOf(false) }
     val context = LocalContext.current
     val userStateViewModel = LocalUserState.current
     val memosViewModel = LocalMemos.current
@@ -102,31 +116,51 @@ fun MemoImage(
         }
     }
 
-    AsyncImage(
-        model = model,
-        imageLoader = imageLoader,
-        contentDescription = null,
-        modifier = imageModifier,
-        contentScale = ContentScale.Crop,
-        onSuccess = { state ->
-            val diskCache = imageLoader.diskCache
-            val diskCacheKey = state.result.diskCacheKey
+    Box(modifier = imageModifier) {
+        AsyncImage(
+            model = model,
+            imageLoader = imageLoader,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+            onSuccess = { state ->
+                val diskCache = imageLoader.diskCache
+                val diskCacheKey = state.result.diskCacheKey
 
-            if (diskCache != null && diskCacheKey != null) {
-                val downloadedFile = diskCache.openSnapshot(diskCacheKey)?.data?.toFile()
-                diskCacheFile = downloadedFile
-                val shouldPersistDownloadedFile = resourceIdentifier != null &&
-                    downloadedFile != null &&
-                    modelUri.scheme != "file"
-                if (shouldPersistDownloadedFile) {
-                    scope.launch {
-                        memosViewModel.cacheResourceFile(resourceIdentifier, Uri.fromFile(downloadedFile))
+                if (diskCache != null && diskCacheKey != null) {
+                    val downloadedFile = diskCache.openSnapshot(diskCacheKey)?.data?.toFile()
+                    diskCacheFile = downloadedFile
+                    val shouldPersistDownloadedFile = resourceIdentifier != null &&
+                        downloadedFile != null &&
+                        modelUri.scheme != "file"
+                    if (shouldPersistDownloadedFile) {
+                        scope.launch {
+                            memosViewModel.cacheResourceFile(resourceIdentifier, Uri.fromFile(downloadedFile))
+                        }
                     }
                 }
+                loadFailed = false
+            },
+            onError = {
+                loadFailed = true
+                Timber.d("Failed to load memo image: %s", url)
             }
-        },
-        onError = {
-            Timber.d("Failed to load memo image: %s", url)
+        )
+
+        if (loadFailed) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.BrokenImage,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
-    )
+    }
 }
