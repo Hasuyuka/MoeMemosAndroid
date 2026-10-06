@@ -141,9 +141,11 @@ fun MemoImage(
                 }
                 loadFailed = false
             },
-            onError = {
+            onError = { state ->
                 loadFailed = true
-                Timber.d("Failed to load memo image: %s", url)
+                // 记下**真实的**异常，而不是只记一句「失败了」：文件不见了和解码失败
+                // 是完全不同的两类问题，只有异常本身能把它们分开。
+                ImageLoadTrace.recordError(url, state.result.throwable)
             }
         )
 
