@@ -112,6 +112,23 @@ interface MemoDao {
     suspend fun insertMemo(memo: MemoEntity)
 
     /**
+     * 把「建备忘 + 回填附件」放进**同一个事务**。
+     *
+     * 之前这是仓库里两条独立调用：备忘行先落库，附件再逐条回填 `memoId`。
+     * 中间任何一步失败（或者进程被打断），都会留下一条「备忘已经存在、但附件只挂上
+     * 一部分」的记录——用户看到的就是「加了 6 张图，只剩 1 张」，而且数据库里
+     * 确实只有那么几条是关联上的。
+     *
+     * 附件行的 `memoId` 上有 `onDelete = CASCADE`，所以半成品状态在界面上与
+     * "附件被删了"完全无法区分；同一个事务里要么都成、要么都不成。
+     */
+    @Transaction
+    suspend fun insertMemoWithResources(memo: MemoEntity, resources: List<ResourceEntity>) {
+        insertMemo(memo)
+        resources.forEach { insertResource(it) }
+    }
+
+    /**
      * Upserts [memo] only if its stored row still has [expectedLastModified], i.e. nothing wrote the
      * row since the caller read it. Returns false (and writes nothing) otherwise or if the row is gone.
      */

@@ -97,19 +97,25 @@ class LocalDatabaseRepository(
                 lastModified = now,
                 lastSyncedAt = now
             )
-            memoDao.insertMemo(memo)
-
-            resources.forEach { resource ->
-                memoDao.insertResource(
-                    resource.copy(
-                        accountKey = accountKey,
-                        memoId = memo.identifier
-                    )
-                )
+            memoDao.insertMemoWithResources(
+                memo = memo,
+                resources = resources.map {
+                    it.copy(accountKey = accountKey, memoId = memo.identifier)
+                },
+            )
+            val linked = memoDao.getMemoResources(memo.identifier, accountKey)
+            FileTrace.record(
+                "createMemo 建 ${memo.identifier.take(8)} 传入=${resources.size} 落库=${linked.size}"
+            )
+            if (linked.size != resources.size) {
+                // 落库数与传入数不一致，说明有关联没写进去。以前这里没有任何信号，
+                // 界面上只表现为"少了几张图"。记下来。
+                FileTrace.record("createMemo 关联数不符 传入=${resources.size} 落库=${linked.size}")
             }
 
             ApiResponse.Success(withResources(memo))
         } catch (e: Exception) {
+            FileTrace.record("createMemo 异常 ${e.javaClass.simpleName}: ${e.message?.take(60)}")
             ApiResponse.Failure.Exception(e)
         }
     }

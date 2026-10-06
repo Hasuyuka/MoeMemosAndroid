@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.model.ExploreLayout
 import me.mudkip.moememos.util.planMemoListUpdate
+import me.mudkip.moememos.util.FileTrace
 import me.mudkip.moememos.data.local.entity.ResourceEntity
 import me.mudkip.moememos.data.model.DailyUsageStat
 import me.mudkip.moememos.data.model.MemoVisibility
@@ -229,6 +230,11 @@ class MemosViewModel @Inject constructor(
      */
     private fun applyMemos(latestMemos: List<MemoEntity>) {
         val plan = planMemoListUpdate(memos, latestMemos)
+        // 诊断：读回来的附件总数。与 createMemo 记的「落库数」对照，就能判断
+        // 「少了几张图」是写进去的时候就少，还是读出来/界面渲染时才少。
+        FileTrace.record(
+            "列表刷新 备忘=${latestMemos.size} 附件合计=${latestMemos.sumOf { it.resources.size }}"
+        )
         if (plan.removeFromTail > 0 || plan.edits.isNotEmpty()) {
             repeat(plan.removeFromTail) { memos.removeAt(memos.size - 1) }
             plan.edits.forEach { edit ->
