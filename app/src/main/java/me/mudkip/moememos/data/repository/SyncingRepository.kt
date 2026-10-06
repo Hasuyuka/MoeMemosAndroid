@@ -792,7 +792,6 @@ class SyncingRepository(
                 applyRemoteMemo(
                     remoteMemo,
                     preferredLocalIdentifier = pushed.identifier,
-                    keepPendingResources = true,
                     expectedLastModified = pushed.lastModified
                 )
             }
@@ -801,7 +800,7 @@ class SyncingRepository(
             }
         }
         if (!keepLocal) {
-            applyRemoteMemo(remoteMemo, preferredLocalIdentifier = pushed.identifier, keepPendingResources = true)
+            applyRemoteMemo(remoteMemo, preferredLocalIdentifier = pushed.identifier)
         }
     }
 
@@ -866,7 +865,6 @@ class SyncingRepository(
     private suspend fun applyRemoteMemo(
         remoteMemo: Memo,
         preferredLocalIdentifier: String? = null,
-        keepPendingResources: Boolean = false,
         expectedLastModified: Instant? = null
     ): Boolean {
         val remoteId = remoteMemoId(remoteMemo)
@@ -901,7 +899,14 @@ class SyncingRepository(
         val currentResources = memoDao.getMemoResources(localIdentifier, accountKey)
         val remoteResourceIds = remoteMemo.resources.mapTo(hashSetOf()) { remoteResourceId(it) }
         currentResources.forEach { currentResource ->
-            if (keepPendingResources && currentResource.remoteId == null) {
+            // `remoteId == null` = 这条附件**从来没有上传成功过**，服务端不可能"删除"一个
+            // 它没见过的东西。所以这里一律跳过，不能删。
+            //
+            // 之前只有 keepPendingResources 为 true 时才跳过，而普通拉取路径
+            // （上面几处 applyRemoteMemo 都没传这个参数，默认 false）会把用户刚添加、
+            // 还没来得及上传的附件**连同本地文件一起删掉**——表现就是「新建备忘时加了
+            // 4 张图，只剩 1 张」。这是实打实的丢图，不是显示问题。
+            if (currentResource.remoteId == null) {
                 return@forEach
             }
             if (currentResource.remoteId !in remoteResourceIds) {
