@@ -8,6 +8,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import me.mudkip.moememos.data.model.ImageFormat
 import me.mudkip.moememos.data.model.ImageQuality
 import me.mudkip.moememos.data.model.scaledDimensions
+import me.mudkip.moememos.util.FileTrace
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
@@ -124,13 +125,23 @@ class FileStorage @Inject constructor(
 
     private fun saveFile(accountKey: String, filename: String, writer: (java.io.OutputStream) -> Unit): Uri {
         val file = File(accountDir(accountKey), filename)
-        file.outputStream().use(writer)
-        return Uri.fromFile(file)
+        return try {
+            file.outputStream().use(writer)
+            FileTrace.record("写 ${file.name.takeLast(24)} ${file.length() / 1024}KB")
+            Uri.fromFile(file)
+        } catch (e: Throwable) {
+            // 写失败会留下一个残缺文件（甚至 0 字节）。以前这里静默抛出，
+            // 上层只看到"上传失败"，磁盘上到底有没有半张图无从得知。
+            FileTrace.record("写失败 ${file.name.takeLast(24)} ${e.javaClass.simpleName}")
+            throw e
+        }
     }
 
     fun deleteFile(uri: Uri) {
         uri.path?.let { path ->
-            File(path).delete()
+            val file = File(path)
+            FileTrace.record("删 ${file.name.takeLast(24)} 存在=${file.exists()}")
+            file.delete()
         }
     }
 

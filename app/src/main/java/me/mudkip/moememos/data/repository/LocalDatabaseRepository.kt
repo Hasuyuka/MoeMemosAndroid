@@ -14,6 +14,7 @@ import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.model.User
 import me.mudkip.moememos.util.extractCustomTags
+import me.mudkip.moememos.util.FileTrace
 import okhttp3.MediaType
 import java.time.Instant
 import java.util.UUID
@@ -143,6 +144,7 @@ class LocalDatabaseRepository(
                 val incomingIds = resources.mapTo(hashSetOf()) { it.identifier }
                 existingResources.forEach { existing ->
                     if (existing.identifier !in incomingIds) {
+                        FileTrace.record("updateMemo 删多余附件 ${existing.identifier.take(8)}")
                         deleteLocalFile(existing)
                         memoDao.deleteResource(existing)
                     }
@@ -263,6 +265,7 @@ class LocalDatabaseRepository(
                 memoId = memoIdentifier
             )
             memoDao.insertResource(resource)
+            FileTrace.record("建附件 ${resource.identifier.take(8)} ${filename.takeLast(16)} memoId=${memoIdentifier?.take(8) ?: "null"}")
             ApiResponse.Success(resource)
         } catch (e: Exception) {
             ApiResponse.Failure.Exception(e)
@@ -294,6 +297,7 @@ class LocalDatabaseRepository(
         val local = resource.localUri ?: resource.uri
         val localUri = local.toUri()
         if (localUri.scheme == "file") {
+            FileTrace.record("删附件 ${resource.identifier.take(8)} ${resource.filename.takeLast(16)}")
             fileStorage.deleteFile(localUri)
         }
     }

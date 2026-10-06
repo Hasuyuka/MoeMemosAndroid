@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import me.mudkip.moememos.data.model.ResourceRepresentable
+import me.mudkip.moememos.util.FileTrace
 import timber.log.Timber
 import java.io.File
 
@@ -79,6 +80,27 @@ internal fun ImageDiagnosticsOverlay(
                 fontSize = 8.sp,
                 fontFamily = FontFamily.Monospace
             )
+        }
+
+        // 文件层的写入/删除流水。这是唯一能回答「文件是被谁删的，还是压根没写成功」
+        // 的东西——只靠看代码，所有删文件的地方都同时删了数据库行，与"行还在"矛盾。
+        val fileEvents = FileTrace.events
+        if (fileEvents.isNotEmpty()) {
+            Text(
+                text = "── 文件流水（最近 ${fileEvents.size} 条）──",
+                color = Color(0xFFFFD479),
+                fontSize = 8.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(top = 3.dp)
+            )
+            fileEvents.forEach { line ->
+                Text(
+                    text = line,
+                    color = Color(0xFF9FD4FF),
+                    fontSize = 8.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
         }
     }
 }
