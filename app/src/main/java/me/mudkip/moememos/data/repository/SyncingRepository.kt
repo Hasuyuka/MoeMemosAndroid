@@ -202,14 +202,10 @@ class SyncingRepository(
             } while (!memoDao.insertMemoIfUnchanged(updatedMemo, existingMemo.lastModified))
 
             if (resources != null) {
-                val existingResources = memoDao.getMemoResources(identifier, accountKey)
-                val incomingIds = resources.mapTo(hashSetOf()) { it.identifier }
-                existingResources.forEach { existing ->
-                    if (existing.identifier !in incomingIds) {
-                        deleteLocalFile(existing)
-                        memoDao.deleteResource(existing)
-                    }
-                }
+                // 只写入/更新，**绝不删除**。理由同 LocalDatabaseRepository.updateMemo：
+                // 传入列表来自调用方的内存状态，可能是陈旧或不完整的，拿它当权威全集
+                // 会把用户新加之外的附件连文件一起删掉。附件的移除是显式的
+                // （deleteResource），这里不需要兜底删除。
                 resources.forEach { resource ->
                     memoDao.insertResource(
                         resource.copy(

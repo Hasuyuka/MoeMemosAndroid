@@ -328,16 +328,18 @@ fun MemoInputPage(
         viewModel.uploadResources.clear()
         when {
             memo != null -> {
-                viewModel.uploadResources.addAll(memo.resources)
-                initialContent = memo.content
-                // Adopt the database row if the list copy was stale and nothing was edited yet
+                // 附件一律以**数据库那一份**为准：`memo` 是列表里的对象，它的 resources
+                // 可能是陈旧的（少了刚加进去的几张）。以前只有"用户什么都没改"时才采用
+                // 数据库那一份，否则就用陈旧的——而保存时 updateMemo 会把不在列表里的
+                // 附件当成「已移除」处理，真机上丢图就是这么来的。
                 val fresh = viewModel.loadMemo(memo.identifier)
+                viewModel.uploadResources.addAll(fresh?.resources ?: memo.resources)
+                initialContent = memo.content
+                // 正文与可见性仍只在"没改过"时才采用数据库那一份，避免覆盖正在编辑的内容。
                 if (fresh != null && fresh != memo && isUntouchedExistingMemo()) {
                     baseline = fresh
                     initialContent = fresh.content
                     currentVisibility = fresh.visibility
-                    viewModel.uploadResources.clear()
-                    viewModel.uploadResources.addAll(fresh.resources)
                     text = TextFieldValue(fresh.content, TextRange(fresh.content.length))
                 }
             }

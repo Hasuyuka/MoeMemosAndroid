@@ -140,15 +140,22 @@ class LocalDatabaseRepository(
             memoDao.insertMemo(updatedMemo)
 
             if (resources != null) {
-                val existingResources = memoDao.getMemoResources(identifier, accountKey)
-                val incomingIds = resources.mapTo(hashSetOf()) { it.identifier }
-                existingResources.forEach { existing ->
-                    if (existing.identifier !in incomingIds) {
-                        FileTrace.record("updateMemo 删多余附件 ${existing.identifier.take(8)}")
-                        deleteLocalFile(existing)
-                        memoDao.deleteResource(existing)
-                    }
-                }
+                // 只写入/更新，**绝不删除**。
+                //
+                // 这里以前会把「不在传入列表里」的附件连数据库行带本地文件一起删掉，
+                // 而传入列表来自调用方的内存状态（编辑器的 uploadResources、详情页
+                // 勾复选框时传的 memo.resources），它可能是陈旧或不完整的。
+                // 后果是：用户只是往已有备忘里加了一张图，保存时另外几张被当成
+                // 「已被移除」销毁了。beta.20 的文件流水抓到了现场：
+                //
+                //   10:46:15 createMemo 传附件=4          ← 新建时确实有 4 张
+                //   10:46:27 editMemo   传附件=2          ← 编辑器只拿到 2 张
+                //   10:46:27 updateMemo 删多余附件 6ffac48
+                //   10:46:27 删 b04262568_…_1000018053.jpg 存在=true
+                //
+                // 附件的移除本来就是**显式**的：编辑器里点图片菜单的「移除」、
+                // 排序对话框里的删除，走的都是 deleteResource。所以这段删除是冗余的，
+                // 去掉不会漏清理。
                 resources.forEach { resource ->
                     memoDao.insertResource(
                         resource.copy(
