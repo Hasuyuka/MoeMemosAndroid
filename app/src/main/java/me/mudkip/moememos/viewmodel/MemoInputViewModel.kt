@@ -20,7 +20,6 @@ import kotlinx.coroutines.withContext
 import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.local.entity.ResourceEntity
 import me.mudkip.moememos.util.restampDatesInOrder
-import me.mudkip.moememos.util.FileTrace
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.service.MemoService
 import me.mudkip.moememos.ext.settingsDataStore
@@ -98,7 +97,6 @@ class MemoInputViewModel @Inject constructor(
 
     suspend fun createMemo(content: String, visibility: MemoVisibility, tags: List<String>): ApiResponse<MemoEntity> = withContext(viewModelScope.coroutineContext) {
         applyUploadOrderToDates()
-        FileTrace.record("createMemo 传附件=${uploadResources.size}")
         val response = memoService.getRepository().createMemo(content, visibility, uploadResources, tags)
         // Update widgets when a new memo is created
         response.suspendOnSuccess {
@@ -109,7 +107,6 @@ class MemoInputViewModel @Inject constructor(
 
     suspend fun editMemo(identifier: String, content: String, visibility: MemoVisibility, tags: List<String>): ApiResponse<MemoEntity> = withContext(viewModelScope.coroutineContext) {
         applyUploadOrderToDates()
-        FileTrace.record("editMemo 传附件=${uploadResources.size}")
         val response = memoService.getRepository().updateMemo(identifier, content, uploadResources, visibility, tags)
         // Update widgets when a memo is edited
         response.suspendOnSuccess {
@@ -176,19 +173,12 @@ fun applyImageOrder(orderedImageIdentifiers: List<String>) {
                 val filename = queryDisplayName(uri)
                     ?: ("attachment_${UUID.randomUUID()}" + if (extension.isNullOrBlank()) "" else ".$extension")
 
-                val result = memoService.getRepository()
+                memoService.getRepository()
                     .createResource(filename, mimeType?.toMediaTypeOrNull(), uri, memoIdentifier ?: autosaveIdentifier)
-                FileTrace.record(
-                    "上传 ${filename.takeLast(16)} " +
-                        (if (result is ApiResponse.Success) "成功" else "失败")
-                )
-                result.suspendOnSuccess {
-                    uploadResources.add(data)
-                    FileTrace.record("入待存表 ${filename.takeLast(16)} 共${uploadResources.size}")
-                }
-                result
+                    .suspendOnSuccess {
+                        uploadResources.add(data)
+                    }
             } catch (e: Exception) {
-                FileTrace.record("上传异常 ${e.javaClass.simpleName}: ${e.message?.take(40)}")
                 ApiResponse.Failure.Exception(e)
             }
         }
