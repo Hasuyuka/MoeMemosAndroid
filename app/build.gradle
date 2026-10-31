@@ -85,6 +85,18 @@ android {
     }
 
     buildTypes {
+        // 有发布签名时，debug 包也用**同一把** release keystore 签。
+        //
+        // 目的：让开发中的包能直接覆盖安装到已经装了正式版的手机上，不丢数据。
+        // 否则 debug 包自带的是 debug keystore 签名，与正式包不同，系统会拒绝覆盖，
+        // 只能先卸载——那等于清空用户的备忘录，也没法拿真实数据复现问题。
+        //
+        // 没有签名变量时（比如本地随便编译）自动退回默认 debug key，不影响使用。
+        debug {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
         release {
             minifyEnabled = true
             shrinkResources = true
