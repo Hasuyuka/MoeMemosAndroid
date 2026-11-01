@@ -7,6 +7,7 @@
 
 | 我想… | 看这个 |
 | --- | --- |
+| **知道现在这个 App 到底能做什么** | [`requirements/01-current-baseline-2.1.0.md`](requirements/01-current-baseline-2.1.0.md) |
 | 提一个需求 | [`requirements/TEMPLATE.md`](requirements/TEMPLATE.md)，复制成 `R-xxx-标题.md` |
 | 知道需求为什么这么定 | [`adr/`](adr/) —— 架构决策记录，一条决策一个文件 |
 | 改代码前知道会碰到哪些上游文件 | [`upstream-divergence.md`](upstream-divergence.md) |
@@ -32,6 +33,7 @@ docs/
   requirements/
     README.md                    需求条目的写法与状态机
     TEMPLATE.md                  复制这个来写新需求
+    01-current-baseline-2.1.0.md 2.1.0 现状说明书（能做什么、限制在哪）
     00-baseline-2026-10-01.md    历史基线（fork 初期对上游代码的全面梳理，供追溯）
   adr/
     README.md                    ADR 是什么、什么时候写
