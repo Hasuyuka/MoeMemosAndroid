@@ -50,10 +50,45 @@ jobs:
             "$ANDROID_TOOLS/sdkmanager" --sdk_root="$ANDROID_HOME" "ndk;28.2.13676358"
           fi
 
+      # 分支验证除了「能不能编译」，还要产出**可安装的包**：
+      # 每次改动都去 push tag 触发 Release 太慢了（CI 4 分钟 vs Release 20 分钟 + 打 tag）。
+      #
+      # 有发布签名时用同一把 release keystore 签 debug 包（见 app/build.gradle 的 debug 块），
+      # 这样可以直接覆盖安装到已装正式版的手机上，不丢数据、也能拿真实数据复现问题。
+      # 没有密钥时（比如来自 fork 的 PR 拿不到 secrets）退回默认 debug key，仍然能编译和测试。
       - name: Compile debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "${KEYSTORE_B64:-}" ]; then
+            echo "$KEYSTORE_B64" | base64 --decode > "${RUNNER_TEMP}/release.keystore"
+            export ANDROID_SIGNING_STORE_FILE="${RUNNER_TEMP}/release.keystore"
+            echo "使用 release keystore 签名 debug 包（可直接覆盖正式版安装）"
+          else
+            echo "没有签名密钥，debug 包使用默认 debug key（只能装在没装过正式版的设备上）"
+          fi
+          ./gradlew :app:assembleDebug --stacktrace
+          # 把实际签名证书打印出来，方便核对「这个包能不能覆盖安装」
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | head -5 || true
+          fi
+
+      - name: Upload debug APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moememos-debug-${{ github.run_id }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Run unit tests
+        if: always()
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
       - name: Upload test reports
