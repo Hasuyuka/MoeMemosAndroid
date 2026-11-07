@@ -92,8 +92,11 @@ private fun MemosHomePageContent(
     val sortDirection = settings.usersList.firstOrNull { it.accountKey == settings.currentUser }
         ?.settings?.memoSortDirection ?: MemoSortDirection.DESCENDING
 
-    // 批量操作（多选）：入口放在顶栏的显式按钮上，不用长按——卡片的 LONG 手势
-    // 已经被「进入编辑」占用（且用户可配置），两者会冲突。
+    // 批量操作（多选）：入口是**长按卡片**，顶栏没有多选按钮。
+    //
+    // 历史：曾经设想过把入口放顶栏的显式按钮上，理由是卡片的 LONG 手势已被「进入编辑」
+    // 占用（且用户可配置）。实际落地时用的是长按，卡片的编辑手势因此只剩单击/双击——
+    // 长按固定给多选，两者不冲突。
     val selection = remember { MemoSelectionState() }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val visibleIds = remember(memosViewModel.memos) { memosViewModel.memos.map { it.identifier } }
